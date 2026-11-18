@@ -69,7 +69,7 @@ class PersonalSpace {
     const roles=[['accountant','会计'],['owner','管理层'],['sales','销售'],['hr','人事'],['employee','员工']];
     this.demoBar.innerHTML=L.markup(`<div class="demo-bar-title"><strong>演示版本</strong><small>虚构资料，可直接操作</small></div>
       <div class="demo-bar-actions"><label for="demo-role">角色</label><select id="demo-role">${roles.map(([id,label])=>`<option value="${id}"${id===this.user.role?' selected':''}>${label}</option>`).join('')}</select>
-      ${btn('demo-reset','重置演示','btn small')}${btn('logout',window.pagesDemoRequest?'返回试用首页':'返回登录','btn small')}</div>
+      <a class="btn small" href="index.html?training=1${L.current==='zh-HK'?'&amp;lang=zh-HK':''}#training">实训关卡</a>${btn('demo-reset','重置演示','btn small')}${btn('logout',window.pagesDemoRequest?'返回试用首页':'返回登录','btn small')}</div>
       <p id="demo-error" class="space-error" role="alert"></p>`);
     this.demoBar.hidden=false;
   }
