@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: cagene-finance-demo
+    runtime: node
+    plan: free
+    region: singapore
+    branch: codex/render-demo
+    rootDir: app
+    buildCommand: npm ci --omit=dev
+    startCommand: node render-demo.mjs
+    envVars:
+      - key: NODE_VERSION
+        value: 24.11.1
+      - key: ACCT_USE_LOCAL_SUBSCRIPTION
+        value: "0"
