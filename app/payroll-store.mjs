@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID } from './workspace-platform.mjs';
 import { Bank, Business, Enterprise } from './ledger-core.mjs';
 
 const ITEMS=['base','attendance','work','commission','deduction','employeeMpf','employerMpf'];

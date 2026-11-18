@@ -44,7 +44,8 @@ class PersonalSpace {
     });
   }
   async request(path,method='GET',data,base=this.demo?'/api/demo/workspace/':'/api/workspace/') {
-    const response=await fetch(base+path,{
+    const transport=window.pagesDemoRequest || window.fetch.bind(window);
+    const response=await transport(base+path,{
       method,credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(18000),
       headers:{'X-Account-Workspace':'1',...(this.user?{'X-Workspace-User':this.user.id}:{}),...(data===undefined?{}:{'Content-Type':'application/json'})},
       ...(data===undefined?{}:{body:JSON.stringify(data)}),
@@ -68,13 +69,14 @@ class PersonalSpace {
     const roles=[['accountant','会计'],['owner','管理层'],['sales','销售'],['hr','人事'],['employee','员工']];
     this.demoBar.innerHTML=L.markup(`<div class="demo-bar-title"><strong>演示版本</strong><small>虚构资料，可直接操作</small></div>
       <div class="demo-bar-actions"><label for="demo-role">角色</label><select id="demo-role">${roles.map(([id,label])=>`<option value="${id}"${id===this.user.role?' selected':''}>${label}</option>`).join('')}</select>
-      ${btn('demo-reset','重置演示','btn small')}${btn('logout','返回登录','btn small')}</div>
+      ${btn('demo-reset','重置演示','btn small')}${btn('logout',window.pagesDemoRequest?'返回试用首页':'返回登录','btn small')}</div>
       <p id="demo-error" class="space-error" role="alert"></p>`);
     this.demoBar.hidden=false;
   }
   demoURL(exit=false){
     const url=new URL(location.href);
     url.hash='';url.searchParams.delete('file');
+    if(exit && window.pagesDemoRequest)return new URL('../',url).href;
     if(exit)url.searchParams.delete('demo');
     return url.href;
   }

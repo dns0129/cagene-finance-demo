@@ -1,12 +1,8 @@
-import { DatabaseSync } from 'node:sqlite';
-import { chmodSync, mkdirSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { randomBytes, randomInt, randomUUID, createHash, scrypt, timingSafeEqual } from 'node:crypto';
-import { promisify } from 'node:util';
+import { openDatabase, randomBytes, randomInt, randomUUID, tokenHash, derive, timingSafeEqual, fromHex } from './workspace-platform.mjs';
 import { parseLines, invoiceSummary, Invoices, Business, Enterprise } from './ledger-core.mjs';
 import { createPayrollStore } from './payroll-store.mjs';
 
-const derive=promisify(scrypt), DAY=86_400_000, SESSION=7*DAY;
+const DAY=86_400_000, SESSION=7*DAY;
 const COOKIE='acct_session', MAX_BODY=24*1024*1024;
 const empty=()=>({ledger:null,draft:null,recovery:null,folders:[],reports:[]});
 // One company per system: the books, folders and reports are shared; each person keeps their own unsaved draft.
@@ -16,7 +12,6 @@ const companyPart=s=>({ledger:s.ledger,folders:s.folders,reports:s.reports});
 const personalPart=s=>({draft:s.draft??null,recovery:s.recovery??null});
 const validDay=x=>typeof x==='string' && /^\d{4}-\d{2}-\d{2}$/.test(x) && !Number.isNaN(Date.parse(x+'T00:00:00Z')) && new Date(x+'T00:00:00Z').toISOString().slice(0,10)===x;
 const object=x=>!!x && typeof x==='object' && !Array.isArray(x);
-const tokenHash=x=>createHash('sha256').update(x).digest('hex');
 class WorkspaceError extends Error {
   constructor(status,code,message) { super(message); Object.assign(this,{status,code}); }
 }
@@ -93,7 +88,7 @@ async function body(req,max) {
     if(length>max) fail(413,'too_large','数据超过空间单次保存上限，请先导出备份并减少附件。');
     chunks.push(chunk);
   }
-  try { return JSON.parse(Buffer.concat(chunks)); }
+  try { return JSON.parse(await new Blob(chunks).text()); }
   catch { fail(400,'bad_json','请求格式无效。'); }
 }
 
@@ -160,18 +155,11 @@ function populateDemo(db, fixture) {
     audit.run(row.run_id,row.at,row.user_id,row.name,row.action,JSON.stringify(row.before),JSON.stringify(row.after));
 }
 
-export function createWorkspace({file=':memory:', publicOrigin='', allowSignup=true, ownerReadOnly=false,demo=null}={}) {
+export function createWorkspace({file=':memory:', publicOrigin='', allowSignup=true, ownerReadOnly=false,demo=null,database=null}={}) {
   const origin=publicOrigin?new URL(publicOrigin).origin:'';
   if (origin && !origin.startsWith('https://')) throw new Error('ACCOUNT_PUBLIC_ORIGIN 必须是 HTTPS 来源');
   if(demo && file!==':memory:')throw new Error('演示样例只能载入独立的内存账套。');
-  let db;
-  if (file!==':memory:') {
-    file=resolve(file); mkdirSync(dirname(file),{recursive:true,mode:0o700});
-    // Create the DB with owner-only permissions before SQLite can create sidecars.
-    const previous=process.umask(0o077);
-    try { db=new DatabaseSync(file); chmodSync(file,0o600); }
-    finally { process.umask(previous); }
-  } else db=new DatabaseSync(file);
+  const db=database ?? openDatabase(file);
   db.exec(`
     PRAGMA foreign_keys=ON;
     PRAGMA journal_mode=WAL;
@@ -300,7 +288,7 @@ export function createWorkspace({file=':memory:', publicOrigin='', allowSignup=t
   const record=(user,action,detail={})=>queries.audit.run(Date.now(),user?Number(user.id):null,user?.name||'',action,JSON.stringify(detail));
   const payroll=createPayrollStore({db,atomic,fail,record,company:queries.company,companyWrite:queries.companyWrite,userByLogin:id=>lookup(id)});
   if(demo){
-    try { atomic(()=>populateDemo(db,demo.fixture)); }
+    try { atomic(()=>{if(!db.prepare('SELECT id FROM users LIMIT 1').get())populateDemo(db,demo.fixture);}); }
     catch(error){db.close();throw error;}
   }
   function ownCustomers(user){
@@ -335,8 +323,8 @@ export function createWorkspace({file=':memory:', publicOrigin='', allowSignup=t
   async function verifyPassword(account,password,identifier='') {
     const key=account?'user:'+account.id:'login:'+identifier;
     charge(key,10);
-    const result=await passwordHash(password,account?Buffer.from(account.salt,'hex'):dummy);
-    if(!account || !timingSafeEqual(result,Buffer.from(account.password_hash,'hex')))
+    const result=await passwordHash(password,account?fromHex(account.salt):dummy);
+    if(!account || !timingSafeEqual(result,fromHex(account.password_hash)))
       fail(401,'bad_login','账号或密码不正确。');
     limits.delete(key);
   }
