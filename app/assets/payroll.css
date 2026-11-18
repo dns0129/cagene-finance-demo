@@ -1,0 +1,88 @@
+[data-role=hr] :is(.rail,#app,.skip-link,#mobileJump), [data-role=employee] :is(.rail,#app,.skip-link,#mobileJump), [data-role=sales] #mobileJump{display:none!important}
+#payrollPortal{background:var(--ground);min-height:100dvh}
+.pay-portal-top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:16px max(16px,calc((100vw - 1160px)/2));background:var(--sidebar);color:var(--sidebar-text)}
+#payrollPortal .pay-body{max-width:1160px;margin:auto;padding:24px 16px}
+.pay-body{display:grid;gap:16px}
+.pay-banner{display:flex;align-items:end;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:clamp(20px,4vw,36px);background:var(--sidebar,#12243a);border-radius:15px;color:#fff}
+.pay-banner h2{font:700 clamp(28px,5vw,43px)/1.12 var(--f-ui);letter-spacing:-.05em;margin:6px 0 0}
+.pay-banner p{color:#b7d8db;margin:0}.pay-banner .btn.primary{background:#dbf5ec;border-color:#dbf5ec;color:#124840}
+.pay-grid{display:grid;grid-template-columns:minmax(155px,1fr) minmax(0,4fr);gap:16px;align-items:start}
+.pay-period{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:46px;border:0;background:transparent;text-align:left;color:var(--ink);padding:9px;border-radius:7px;cursor:pointer}
+.pay-period[aria-pressed=true],.pay-period:hover{background:var(--accent-soft);color:var(--accent)}
+.pay-period small,.pay-list-item small,.pay-table small{display:block;color:var(--muted);font-size:12px}
+.pay-badge{display:inline-block;border-radius:30px;background:var(--accent-soft);color:var(--accent);padding:4px 10px;font-size:12px;font-weight:650;white-space:nowrap}
+.pay-list-item{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--rule)}
+.pay-list-item>div{margin-right:auto}
+.pay-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,125px),1fr));gap:8px;margin:13px 0}
+.pay-metrics>div{display:grid;gap:4px;background:var(--sheet2);border:1px solid var(--rule);border-radius:8px;padding:11px;min-width:0}
+.pay-metrics span,.pay-steps{font-size:12px;color:var(--ink2)}
+.pay-metrics strong{font:600 16px/1.4 var(--f-num);overflow-wrap:anywhere}
+.pay-steps,.pay-run-actions{display:flex;gap:12px;flex-wrap:wrap}
+.pay-run-actions{margin-top:16px}
+.pay-body .btn,.pay-dialog .btn,.pay-portal-top .btn{min-height:44px}
+.pay-reconcile{padding:16px;margin-top:18px;background:var(--sheet2);border:1px solid var(--rule);border-radius:10px}
+.pay-reconcile h4{margin:0}.pay-reconcile p{color:var(--ink2);font-size:13px}
+.pay-bank-list{margin-top:8px;max-height:250px;overflow:auto}
+.pay-bank-list label{display:grid;grid-template-columns:auto 1fr auto;gap:9px;padding:9px;border-top:1px solid var(--rule);align-items:center}
+.pay-dialog.wide{width:min(100%,800px)}
+.pay-dialog form{display:grid;gap:12px}
+.pay-dialog form p{margin:0;color:var(--ink2)}
+.pay-dialog .actions{flex-wrap:wrap}
+.pay-draft-top{display:grid;grid-template-columns:minmax(130px,170px) minmax(0,1fr);gap:16px;align-items:end}
+.pay-draft-top p{font-size:.84rem;padding-bottom:5px}
+.pay-draft-dialog input,.pay-draft-dialog select{width:100%;min-width:0;min-height:44px}
+.pay-draft-layout{display:grid;grid-template-columns:minmax(180px,1fr) minmax(0,2.45fr);gap:12px}
+.pay-draft-directory,.pay-draft-editor{min-width:0;border:1px solid var(--rule);border-radius:10px;padding:14px}
+.pay-draft-directory{background:var(--sheet2)}
+.pay-draft-directory h4,.pay-person h4{font-weight:700;color:var(--ink);margin:0}
+.pay-draft-directory>label,.pay-person-head p{margin-top:4px;font-size:.8rem;color:var(--ink2)}
+.pay-pick-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px;margin-top:4px}
+.pay-pick-row select{padding:6px;border:1px solid var(--rule2);border-radius:7px;background:var(--sheet);color:var(--ink);font:inherit}
+.pay-pick-row button{padding-inline:8px}
+.pay-draft-directory .pay-roster-count{padding-block:10px 6px;font-size:.8rem}
+.pay-draft-roster{display:grid;gap:5px;max-height:276px;overflow:auto;padding:2px;scrollbar-width:thin}
+.pay-draft-roster button{
+  display:grid;text-align:left;align-content:center;gap:1px;min-height:44px;padding:6px 9px;border-radius:7px;
+  border:1px solid var(--rule);background:var(--sheet);color:var(--ink);font:inherit;cursor:pointer;
+  transition:background-color 140ms,border-color 140ms;overflow-wrap:anywhere
+}
+.pay-draft-roster button:hover{border-color:var(--accent)}
+.pay-draft-roster button[aria-pressed=true]{border-color:var(--accent);background:var(--accent-soft)}
+.pay-draft-roster button:focus-visible{outline-offset:-3px}
+.pay-draft-roster small{font-size:.72rem;color:var(--ink2)}
+.pay-draft-editor{display:grid;align-content:start}
+.pay-draft-editor .pay-draft-empty{align-self:center;padding:16px 5px}
+.pay-person{border:0;padding:0;margin:0;min-width:0}
+.pay-person-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--rule)}
+.pay-person-head h4{font-size:1.1rem;overflow-wrap:anywhere}
+.pay-person .fields{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.pay-person .fields label{color:var(--ink2);font-size:.8rem}
+.pay-person input:disabled{background:var(--sheet2);cursor:default}
+.pay-person .pay-draft-calc,.pay-person .pay-draft-note{margin-top:12px;padding:8px 10px;border-radius:7px;background:var(--accent-soft);color:var(--accent);font-size:.8rem}
+.pay-audit>details{border-top:1px solid var(--rule);padding:12px 0}.pay-audit summary{cursor:pointer}
+.pay-audit-diff{font-size:13px;color:var(--ink2);padding-left:12px}
+.pay-slip{color:#152336;background:#fff;padding:clamp(12px,4vw,25px);border:1px solid #dbe4ed;border-radius:6px;display:grid;gap:12px}
+.pay-slip header h4{margin:4px 0 0;font-size:21px}.pay-slip header>strong{font-size:16px}
+.pay-slip dl{display:flex;gap:12px;flex-wrap:wrap;margin:0}.pay-slip dl div{min-width:90px}
+.pay-slip dt{color:#47566b;font-size:11px}.pay-slip dd{margin:0}
+.pay-slip table{width:100%;border-collapse:collapse;font-size:13px}.pay-slip td,.pay-slip th{border-bottom:1px solid #dbe4ed;text-align:right;padding:6px 4px}
+.pay-slip tr>*:first-child{text-align:left}.pay-slip thead{background:#edf2f7}.pay-slip tfoot{font-weight:700}
+.pay-net{display:flex;justify-content:space-between;align-items:center;background:#e2f1ed;padding:8px;margin:0;color:#123f3a}.pay-net strong{font-size:18px}
+.pay-slip-meta{display:flex;gap:15px;flex-wrap:wrap}.pay-slip p{font-size:12px;margin:0}
+#pay-error:empty,#pay-page-error:empty{display:none}
+@media(max-width:650px){.pay-grid{grid-template-columns:1fr}.pay-dialog input,.pay-dialog select{font-size:16px}.pay-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){
+  .pay-draft-top,.pay-draft-layout{grid-template-columns:1fr;gap:8px}
+  .pay-draft-directory,.pay-draft-editor{padding:10px}
+  .pay-draft-roster{grid-template-columns:repeat(2,minmax(0,1fr));max-height:145px}
+  .pay-earnings-month{grid-column:1/-1}
+}
+@media(prefers-reduced-motion:reduce){.pay-draft-roster button{transition:none}}
+@media(prefers-reduced-motion:no-preference){.pay-banner{animation:pay-in .24s ease-out both}@keyframes pay-in{from{opacity:.82;transform:translateY(4px)}to{opacity:1;transform:none}}}
+@media print{
+  body.print-payroll>*:not(#modal), body.print-payroll #modal .pay-dialog>*:not(.pay-slip){display:none!important}
+  body.print-payroll #modal{display:block!important;position:static;background:none;padding:0}
+  body.print-payroll #modal .pay-dialog{display:block;overflow:visible;max-height:none;width:100%;padding:0;border:0}
+  body.print-payroll .pay-slip{width:100%;border:0;padding:0;font-size:12pt;print-color-adjust:exact}
+}
+[data-ledger-readonly] :is(.toolbar [data-act=settings], .space-library [data-space=report-new], .space-library [data-space=folder-new], .space-library [data-space=folder-edit], .space-library [data-space=report-edit], #taskBar [data-v=bookkeeping], #lock-period, [data-act=reopenPeriod], [data-act=edit], [data-act=duplicate], [data-act=del], [data-act=zeroOB], [data-act=confirmImport], [data-space=report-copy], [data-bank-act=match], [data-bank-act=unmatch], [data-bank-act=ai-run], [data-bank-act=ai-match], [data-bank-act=ai-match-all], [data-org-write]){display:none!important}

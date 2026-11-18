@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="description" content="企业会计工作台：凭证、总账、月结与财务报表。">
+  <title>企业财务工作台 · 财报总览</title>
+  <link rel="stylesheet" href="assets/base.css">
+  <link rel="stylesheet" href="assets/workspace.css">
+  <link rel="stylesheet" href="assets/console.css">
+  <link rel="stylesheet" href="assets/payroll.css">
+  <link rel="stylesheet" href="assets/tutorial.css">
+  <link rel="stylesheet" href="assets/training.css">
+  <script src="assets/opencc-cn2t.js" defer></script>
+  <script src="assets/locale.js" defer></script>
+  <script src="assets/personal-space.js" defer></script>
+  <script src="assets/ai-client.js" defer></script>
+  <script src="assets/report-editor.js" defer></script>
+  <script src="assets/enterprise.js" defer></script>
+  <script src="assets/bank-reconciliation.js" defer></script>
+  <script src="assets/bank-workspace.js" defer></script>
+  <script src="assets/membership.js" defer></script>
+  <script src="assets/business-workflows.js" defer></script>
+  <script src="assets/sales-invoices.js" defer></script>
+  <script src="assets/company.js" defer></script>
+  <script src="assets/inventory.js" defer></script>
+  <script src="assets/fixed-assets.js" defer></script>
+  <script src="assets/chart.js" defer></script>
+  <script src="assets/ledger-guide.js" defer></script>
+  <script src="assets/payroll.js" defer></script>
+  <script src="assets/tutorial-content.js" defer></script>
+  <script src="assets/tutorial.js" defer></script>
+  <script src="assets/training-content.js" defer></script>
+  <script src="assets/training.js" defer></script>
+  <script src="assets/app.js" defer></script>
+</head>
+<body>
+<section id="identityGate" hidden aria-label="账号登录"></section>
+<aside id="demoBar" class="demo-bar" hidden aria-label="演示账套"></aside>
+<section id="salesPortal" hidden aria-label="销售工作台"></section>
+<section id="payrollPortal" hidden aria-label="薪酬與糧單"></section>
+<main id="portalTutorial" hidden aria-labelledby="portalTutorialTitle">
+  <header class="tutorial-portal-header">
+    <h1 id="portalTutorialTitle" tabindex="-1">操作教程</h1>
+    <a class="btn" href="#">返回工作台</a>
+  </header>
+  <div class="tutorial-view" id="portalTutorialPane"></div>
+</main>
+<a class="skip-link" href="#mainContent" data-act="skipMain">跳到主要内容</a>
+<aside class="rail" aria-label="主导航">
+  <a class="rail-brand" href="index.html#reports" data-act="section" data-v="reports">
+    <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4zM13 7a3 3 0 0 1 3-3h4v14h-3a4 4 0 0 0-4 3"/></svg></span>
+    <span>财务工作台<small>FINANCE WORKSPACE</small></span>
+  </a>
+  <nav class="primary-nav">
+    <div class="nav-label">财务报告</div>
+    <a href="index.html#reports" data-act="section" data-v="reports"><span class="nav-icon" aria-hidden="true">▥</span><span>财报总览</span></a>
+    <a href="index.html#pl" data-act="section" data-v="pl"><span class="nav-icon" aria-hidden="true">↗</span><span>利润表</span></a>
+    <a href="index.html#sfp" data-act="section" data-v="sfp"><span class="nav-icon" aria-hidden="true">◫</span><span>资产负债表</span></a>
+    <a href="index.html#scf" data-act="section" data-v="scf"><span class="nav-icon" aria-hidden="true">⇄</span><span>现金流量表</span></a>
+    <a href="index.html#soce" data-act="section" data-v="soce"><span class="nav-icon" aria-hidden="true">▦</span><span>权益变动表</span></a>
+    <a href="index.html#analysis" data-act="section" data-v="analysis"><span class="nav-icon" aria-hidden="true">⌁</span><span>月度分析</span></a>
+    <a href="index.html#custom" data-act="section" data-v="custom"><span class="nav-icon" aria-hidden="true">✎</span><span>管理报表草稿</span></a>
+    <div class="nav-label">账务处理</div>
+    <a href="index.html#bookkeeping" data-act="section" data-v="bookkeeping"><span class="nav-icon" aria-hidden="true">＋</span><span>录入凭证</span></a>
+    <a href="index.html#invoices" data-act="section" data-v="invoices"><span class="nav-icon" aria-hidden="true">▣</span><span>销售发票</span></a>
+    <a href="index.html#journal" data-act="section" data-v="journal"><span class="nav-icon" aria-hidden="true">▤</span><span>凭证查询</span></a>
+    <a href="index.html#ledger" data-act="section" data-v="ledger"><span class="nav-icon" aria-hidden="true">≡</span><span>总账与试算</span></a>
+    <a href="index.html#bank" data-act="section" data-v="bank"><span class="nav-icon" aria-hidden="true">⇄</span><span>银行对账</span></a>
+    <a href="index.html#close" data-act="section" data-v="close"><span class="nav-icon" aria-hidden="true">✓</span><span>月结工作台</span></a>
+    <div class="nav-label">帮助</div>
+    <a href="index.html#tutorial" data-act="section" data-v="tutorial"><span class="nav-icon" aria-hidden="true">?</span><span>操作教程</span></a>
+  </nav>
+  <div class="mobile-navigation"><label class="sr-only" for="mobile-nav">切换功能区</label><select id="mobile-nav"></select></div>
+  <div class="rail-bottom"><span class="online-dot"></span> 浏览器本地保存<button data-act="backup" title="备份与恢复账本" aria-label="备份与恢复账本">↗</button></div>
+</aside>
+<div class="app" id="app">
+  <header class="top">
+    <div class="brand"><div class="eyebrow" id="pageEyebrow">WORKSPACE / 01</div><h1 id="pageTitle" tabindex="-1">财报总览</h1><div class="co-line" id="coLine"></div></div>
+    <div class="toolbar" id="toolbar"></div>
+  </header>
+  <main id="mainContent" tabindex="-1">
+    <section id="trainingCatalog" hidden aria-label="对账实训关卡"></section>
+    <aside id="trainingCoach" hidden aria-labelledby="trainingCoachTitle"></aside>
+    <nav id="reportNav" hidden aria-label="财报编辑导航"></nav>
+    <section id="spaceHome" hidden aria-label="个人中心"></section>
+    <section id="tutorialPane" class="tutorial-view" hidden aria-label="操作教程"></section>
+    <section id="taskBar" class="taskbar" aria-label="当前工作空间"></section>
+    <div id="settingsBar"></div>
+    <section id="enterprisePane" hidden></section>
+    <section id="payrollWorkspace" hidden aria-label="薪酬與糧單"></section>
+    <section id="bankPane" hidden aria-label="银行流水对账"></section>
+    <section id="memberPane" hidden aria-label="会员卡与返佣明细"></section>
+    <section id="businessPane" hidden aria-label="往来明细"></section>
+    <section id="invoicePane" hidden aria-label="销售发票"></section>
+    <section id="cashPane" hidden aria-label="资金账户"></section>
+    <section id="inventoryPane" hidden aria-label="商品存货"></section>
+    <section id="assetPane" hidden aria-label="固定资产卡片"></section>
+    <section id="registerTools" hidden aria-label="查找凭证"></section>
+    <section id="overview" class="overview" aria-label="账本概览"></section>
+    <section class="eq" id="eqBox" hidden aria-label="会计恒等式与勾稽检查"></section>
+    <section id="reportEditor" hidden aria-label="自定义财报编辑器"></section>
+    <div class="work" id="work">
+      <aside class="bench" id="bench" aria-label="录入交易"></aside>
+      <section class="board" id="board" aria-label="账本与会计报表">
+        <nav class="tabs" id="tabs" role="tablist" aria-label="会计循环步骤"></nav>
+        <div class="ledger-guide" id="ledgerGuide" aria-live="polite" hidden></div>
+        <div id="fpBar"></div>
+        <div class="pane" id="pane"></div>
+      </section>
+    </div>
+    <div id="saveStatus" class="safety" role="status" aria-live="polite"></div>
+  </main>
+  <footer class="workspace-footer"><span>企业财务工作台</span><span>单账本 · 单币种 · 本地保存</span></footer>
+</div>
+<aside class="trace" id="trace" hidden aria-live="polite"></aside>
+<div class="modal" id="modal" hidden></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<nav id="mobileJump" class="mobile-jump" aria-label="工作区快捷导航"><button class="btn primary" data-act="workspaceJump" data-v="bench">记一笔</button><button class="btn" data-act="section" data-v="journal">查凭证</button></nav>
+</body>
+</html>
