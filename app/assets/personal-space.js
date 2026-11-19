@@ -69,7 +69,7 @@ class PersonalSpace {
     const roles=[['accountant','会计'],['owner','管理层'],['sales','销售'],['hr','人事'],['employee','员工']];
     this.demoBar.innerHTML=L.markup(`<div class="demo-bar-title"><strong>演示版本</strong><small>虚构资料，可直接操作</small></div>
       <div class="demo-bar-actions"><label for="demo-role">角色</label><select id="demo-role">${roles.map(([id,label])=>`<option value="${id}"${id===this.user.role?' selected':''}>${label}</option>`).join('')}</select>
-      <a class="btn small" href="index.html?training=1${L.current==='zh-HK'?'&amp;lang=zh-HK':''}#training">实训关卡</a>${btn('demo-reset','重置演示','btn small')}${btn('logout',window.pagesDemoRequest?'返回试用首页':'返回登录','btn small')}</div>
+      <a class="btn small" href="index.html?training=1${L.current==='zh-HK'?'&amp;lang=zh-HK':''}#training">实训关卡</a>${btn('demo-reset','恢复演示样例','btn small')}${btn('demo-clear','清空演示数据','btn small demo-clear')}${btn('logout',window.pagesDemoRequest?'返回试用首页':'返回登录','btn small')}</div>
       <p id="demo-error" class="space-error" role="alert"></p>`);
     this.demoBar.hidden=false;
   }
@@ -82,6 +82,7 @@ class PersonalSpace {
   }
   async updateDemo(action,role=this.user.role){
     if(!this.demo||this.busy)return;
+    if(action==='clear'&&!window.confirm(L.text('清空此演示账套的全部业务数据？期初余额、凭证、流水、客户、发票、工资、财报和草稿都将清除。自录数据无法撤销。')))return;
     if(action==='reset'&&!window.confirm(L.text('重置会清除当前演示改动，并恢复预设的流水、凭证、发票和工资。继续重置？')))return;
     this.busy=true;
     const controls=[...this.demoBar.querySelectorAll('button,select')];
@@ -97,12 +98,12 @@ class PersonalSpace {
       }
       await this.request(action,'POST',{role},'/api/demo/');
       clearTimeout(this.timer);this.synced=this.change;
-      if(action==='reset'&&!new URLSearchParams(location.search).has('file'))location.reload();
+      if(action!=='enter'&&!new URLSearchParams(location.search).has('file'))location.reload();
       else location.replace(this.demoURL());
     } catch(e) {
       $('#demo-error').textContent=L.text(e.message);
       $('#demo-role').value=this.user.role;
-      if(action==='reset'&&this.pending)void this.flush();
+      if(action!=='enter'&&this.pending)void this.flush();
     } finally {
       this.busy=false;
       controls.forEach(control=>{control.disabled=false;});
@@ -279,6 +280,7 @@ class PersonalSpace {
     `);
   }
   click(action,id,button){
+    if(action==='demo-clear'&&this.user){void this.updateDemo('clear');return;}
     if(action==='demo-reset'&&this.user){void this.updateDemo('reset');return;}
     if(action==='locale'){L.set(L.current==='zh-HK'?'zh-CN':'zh-HK');this.renderGate();return;}
     if(action==='auth-mode'){this.mode=this.mode==='login'?'register':'login';this.renderGate();$('#identity-username,#identity-identifier')?.focus();return;}

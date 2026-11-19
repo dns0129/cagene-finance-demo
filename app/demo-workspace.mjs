@@ -1,4 +1,5 @@
 import { createWorkspace } from './workspace-store.mjs';
+import { emptyDemo } from './empty-demo.mjs';
 import fixture from './demo-data.json' with {type:'json'};
 
 const PREFIX='/api/demo/';
@@ -55,23 +56,23 @@ export function createDemoWorkspaces(publicOrigin) {
         return;
       }
 
-      if(req.method!=='POST'||!['enter','reset'].includes(route))return error(send,404,'not_found','未找到此操作。');
+      if(req.method!=='POST'||!['enter','reset','clear'].includes(route))return error(send,404,'not_found','未找到此操作。');
       if(!/^application\/json\b/i.test(req.headers['content-type']||''))
         return error(send,400,'bad_json','请求必须使用 JSON。');
       const input=await readJSON(req);
       // Another tab may have switched roles or reset while this request was reading its body.
       if(token&&entry!==workspaces.get(token))
         return error(send,409,'demo_changed','演示账套已更新，请刷新页面。');
-      if(route==='reset'&&!entry)return error(send,401,'demo_expired','请重新进入演示版本。');
+      if(route!=='enter'&&!entry)return error(send,401,'demo_expired','请重新进入演示版本。');
       const role=input?.role ?? entry?.role ?? 'accountant';
       if(!roles.has(role))return error(send,400,'invalid_role','请选择一个演示角色。');
-      const fresh=!entry||route==='reset';
+      const fresh=!entry||route!=='enter';
       if(!entry){
         reclaim();
         if(workspaces.size>=MAX_WORKSPACES)return error(send,429,'demo_busy','演示正在使用中，请稍后再试。');
       }
       const next=fresh ? {workspace:createWorkspace({
-        publicOrigin,allowSignup:false,ownerReadOnly:true,demo:{fixture,cookieName},
+        publicOrigin,allowSignup:false,ownerReadOnly:true,demo:{fixture:route==='clear'?emptyDemo(fixture):fixture,cookieName},
       }),inFlight:0,retired:false} : entry;
       let session;
       try { session=next.workspace.openDemoSession(role,fresh?null:token,SESSION_SECONDS); }

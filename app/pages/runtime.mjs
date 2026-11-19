@@ -1,3 +1,4 @@
+import {emptyDemo} from '../empty-demo.mjs';
 import {createWorkspace} from '../workspace-store.mjs';
 
 const asset=name=>new URL(name,import.meta.url).href;
@@ -62,13 +63,13 @@ export async function request(path,options){
   const [engine,fixture,,store]=await ready;
   return navigator.locks.request('cagene-finance-pages-v1',async()=>{
     const current=await load(store);
-    const enter=path==='/api/demo/enter',reset=path==='/api/demo/reset';
+    const enter=path==='/api/demo/enter',reset=path==='/api/demo/reset',clear=path==='/api/demo/clear';
     if(!current&&!enter)return path.endsWith('/session')?answer(200,{user:null,allowSignup:false}):failure(401,'請重新進入演示。');
-    const db=new DemoDatabase(engine,reset?undefined:current?.bytes);
+    const db=new DemoDatabase(engine,(reset||clear)?undefined:current?.bytes);
     try {
       const origin=location.protocol==='https:'?location.origin:'';
-      const ws=createWorkspace({database:db,publicOrigin:origin,allowSignup:false,ownerReadOnly:true,demo:{fixture,cookieName:'pages_demo'}});
-      if(enter||reset){
+      const ws=createWorkspace({database:db,publicOrigin:origin,allowSignup:false,ownerReadOnly:true,demo:{fixture:clear?emptyDemo(fixture):fixture,cookieName:'pages_demo'}});
+      if(enter||reset||clear){
         const role=JSON.parse(options.body||'{}').role||'accountant';
         if(!fixture.members.some(row=>row.role===role))return failure(400,'未知角色');
         const session=ws.openDemoSession(role,current?.secret,12*3600);
