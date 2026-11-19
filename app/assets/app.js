@@ -2123,9 +2123,41 @@ function benchAI(){
     <div class="field full"><label for="ai-text">交易描述</label><textarea id="ai-text" data-ai="1" rows="3" placeholder="例：9 月 1 日签发两年期票据 30,000 购入一台送货车">${esc(a.text)}</textarea></div>
     <div class="actions"><button class="btn primary" data-act="aiGo"${a.status === 'busy' || !UI.aiConnected ? ' disabled' : ''}>生成分录</button>${a.status === 'busy' ? '<button class="btn" data-act="aiStop">停止</button>' : ''}</div>${out}`;
 }
+function journalLineText(l){
+  return [l.a,lineCode(l),ACC[l.a].zh,plainName(l.a),Locale.text(ACC[l.a].zh),ACC[l.a].en,l.expenseName||'',l.a==='1000'?cashName(l):''].join(' ').toLowerCase();
+}
+function setupJournalLookup(){
+  const input=$('#txQuery'), toggle=$('#txBrowse'), menu=$('#txAccounts'), wrap=input.parentElement;
+  const items=ledgerItems(PICK).map(x=>({code:String(x.code),name:x.user?x.zh:Locale.text(x.zh),en:x.en}));
+  function close(){menu.hidden=true;toggle.setAttribute('aria-expanded','false');}
+  function open(query){
+    const term=query.trim().toLowerCase();
+    const matches=items.filter(x=>[x.code,x.name,x.en].some(v=>String(v).toLowerCase().includes(term)));
+    menu.innerHTML=matches.map(x=>`<button type="button" data-code="${esc(x.code)}"><b>${esc(x.code)}</b> ${esc(x.name)}</button>`).join('');
+    menu.hidden=!matches.length;toggle.setAttribute('aria-expanded',String(!menu.hidden));menu.scrollTop=0;
+  }
+  input.addEventListener('click',()=>open(input.value));
+  input.addEventListener('input',()=>{delete UI.filters.accountCode;open(input.value);});
+  toggle.onclick=()=>{if(menu.hidden)open('');else close();};
+  menu.onclick=e=>{
+    const choice=e.target.closest('[data-code]');if(!choice)return;
+    UI.filters.accountCode=UI.filters.query=input.value=choice.dataset.code;
+    UI.journalPage=1;close();input.focus();renderEntryList();renderBoard();
+  };
+  wrap.addEventListener('focusout',e=>{if(!wrap.contains(e.relatedTarget))close();});
+  wrap.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){close();input.focus();e.preventDefault();return;}
+    if(e.key!=='ArrowDown'&&e.key!=='ArrowUp')return;
+    if(menu.hidden)open(input.value);
+    const options=[...menu.querySelectorAll('button')];if(!options.length)return;
+    const i=options.indexOf(document.activeElement);
+    options[i<0?(e.key==='ArrowDown'?0:options.length-1):(i+(e.key==='ArrowDown'?1:-1)+options.length)%options.length].focus();
+    e.preventDefault();
+  });
+}
 function filteredEntries(entries = R.entries){
   const f = UI.filters, q = f.query.trim().toLowerCase();
-  return entries.filter(e => (!f.from || e.date >= f.from) && (!f.to || e.date <= f.to) && (f.kind==='all' || (f.kind==='regular' ? !e.adj : e.adj)) && (!q || [e.memo,e.party,e.ref,e.date,'J'+e.no,e.id,e.member?.cardNo,memberSale(S,e.member?.saleId)?.member.cardNo,...e.groups.flat().map(l=>l.a+' '+ACC[l.a].zh+' '+Locale.text(ACC[l.a].zh)+' '+ACC[l.a].en+' '+(l.expenseName || ''))].join(' ').toLowerCase().includes(q)));
+  return entries.filter(e => (!f.from || e.date >= f.from) && (!f.to || e.date <= f.to) && (f.kind==='all' || (f.kind==='regular' ? !e.adj : e.adj)) && (f.accountCode ? e.groups.flat().some(l=>lineCode(l)===f.accountCode) : !q || [e.memo,e.party,e.ref,e.date,'J'+e.no,e.id,e.member?.cardNo,memberSale(S,e.member?.saleId)?.member.cardNo,...e.groups.flat().map(journalLineText)].join(' ').toLowerCase().includes(q)));
 }
 function hasFilters(){ const f=UI.filters; return !!(f.query || f.from || f.to || f.kind!=='all'); }
 function renderEntryList(){
@@ -2148,8 +2180,9 @@ function renderBench(){
 function renderRegister(){
   $('#registerTools').innerHTML = Locale.markup(`
     <section class="bsec" id="recordTools"><h3>筛选凭证 <span class="count" id="entryCount"></span></h3>
-    <div class="record-filters"><div class="field full"><label for="txQuery">搜索记录</label><input id="txQuery" type="search" data-filter="query" value="${esc(UI.filters.query)}" placeholder="摘要、往来对象、单据编号或科目" autocomplete="off"></div><div class="field"><label for="txFrom">开始日期</label><input id="txFrom" type="date" data-filter="from" value="${esc(UI.filters.from)}"></div><div class="field"><label for="txTo">结束日期</label><input id="txTo" type="date" data-filter="to" value="${esc(UI.filters.to)}"></div><div class="field full"><label for="txKind">分录类型</label><select id="txKind" data-filter="kind"><option value="all"${UI.filters.kind==='all'?' selected':''}>全部分录</option><option value="regular"${UI.filters.kind==='regular'?' selected':''}>日常分录</option><option value="adjust"${UI.filters.kind==='adjust'?' selected':''}>调整分录（含自动计税）</option></select></div></div><div id="entrySummary" class="record-summary" aria-live="polite"></div><div class="actions"><button class="btn small" data-act="exportCsv">导出匹配分录 CSV</button>${UI.sel ? '<button class="btn small" data-act="clearSel">取消追踪</button>' : ''}</div>
+    <div class="record-filters"><div class="field full"><label for="txQuery">搜索记录</label><div class="journal-lookup"><input id="txQuery" type="search" data-filter="query" value="${esc(UI.filters.query)}" placeholder="输入科目编号、名称、摘要或单据编号" autocomplete="off"><button type="button" class="btn small" id="txBrowse" aria-controls="txAccounts" aria-expanded="false">选择科目 ▾</button><div id="txAccounts" class="journal-options" role="group" aria-label="科目选项" hidden></div></div></div><div class="field"><label for="txFrom">开始日期</label><input id="txFrom" type="date" data-filter="from" value="${esc(UI.filters.from)}"></div><div class="field"><label for="txTo">结束日期</label><input id="txTo" type="date" data-filter="to" value="${esc(UI.filters.to)}"></div><div class="field full"><label for="txKind">分录类型</label><select id="txKind" data-filter="kind"><option value="all"${UI.filters.kind==='all'?' selected':''}>全部分录</option><option value="regular"${UI.filters.kind==='regular'?' selected':''}>日常分录</option><option value="adjust"${UI.filters.kind==='adjust'?' selected':''}>调整分录（含自动计税）</option></select></div></div><div id="entrySummary" class="record-summary" aria-live="polite"></div><div class="actions"><button class="btn small" data-act="exportCsv">导出匹配分录 CSV</button>${UI.sel ? '<button class="btn small" data-act="clearSel">取消追踪</button>' : ''}</div>
     <div class="actions"><button class="btn small subtle" data-act="resetFilters">清除筛选</button></div></section>`);
+  setupJournalLookup();
   renderEntryList();
 }
 
@@ -3081,10 +3114,10 @@ function csvText(entries){
 }
 // One row per matching line (e.g. every 电费 line), without the bank side of each voucher, plus a total.
 function matchedLines(entries, query){
-  const q=query.trim().toLowerCase(), text=l=>[l.a,lineCode(l),ACC[l.a].zh,Locale.text(ACC[l.a].zh),ACC[l.a].en,l.expenseName||'',l.a==='1000'?cashName(l):''].join(' ').toLowerCase();
+  const q=query.trim().toLowerCase();
   const out=[];
   for (const e of entries) {
-    const lines=e.groups.flat(), hit=lines.filter(l=>text(l).includes(q));
+    const lines=e.groups.flat(), hit=lines.filter(l=>UI.filters.accountCode?lineCode(l)===UI.filters.accountCode:journalLineText(l).includes(q));
     // Matched on the memo or party only: the voucher's income/expense lines are what the search was about.
     for (const l of hit.length ? hit : lines.filter(l=>ACC[l.a].pl)) out.push({e,l});
   }

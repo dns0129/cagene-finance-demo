@@ -220,3 +220,11 @@
 
 .demo-bar-actions .demo-clear{color:#962d28;border-color:#d6aca9}
 .demo-bar-actions .demo-clear:hover{background:#fff0ee}
+
+.journal-lookup{position:relative;display:flex;align-items:stretch;gap:.4rem}
+.journal-lookup input{min-width:0;flex:1}
+.journal-lookup #txBrowse{white-space:nowrap}
+.journal-options{position:absolute;inset:calc(100% + 4px) 0 auto;z-index:8;max-height:15rem;overflow:auto;overscroll-behavior:contain;background:var(--surface,#fff);color:var(--ink,#152c33);border:1px solid var(--line,#c4d3d6);border-radius:8px;box-shadow:0 8px 24px #18313822}
+.journal-options button{display:block;width:100%;text-align:left;font:inherit;color:inherit;background:transparent;border:0;padding:.55rem .75rem;cursor:pointer}
+.journal-options button:hover,.journal-options button:focus-visible{background:#e5f2ef;color:#143c35}
+.journal-options b{display:inline-block;min-width:4em;font-variant-numeric:tabular-nums}
