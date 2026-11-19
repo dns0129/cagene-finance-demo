@@ -19,12 +19,48 @@ function quantity(text){
   if(!value)throw new Error('数量须大于零');
   return value;
 }
-function price(text){
+function price(text,allowZero=false){
   const raw=String(text ?? '').trim();
   if(!/^(?:\d{1,10}|\d{1,3}(?:,\d{3}){1,3})(?:\.\d{1,2})?$/.test(raw))throw new Error('单价须为正数，最多两位小数');
   const [whole,part='']=raw.replace(/,/g,'').split('.'), value=Number(whole)*100+Number(part.padEnd(2,'0'));
-  if(!value)throw new Error('单价须大于零');
+  if(!value&&!allowZero)throw new Error('单价须大于零');
   return value;
+}
+const validDay=value=>/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString().slice(0,10)===value;
+const moneyInput=cents=>(cents/100).toFixed(2);
+function invoiceHeader(data){
+  const header={};
+  for(const [k,label,max] of [['branch','分店',60],['maker','制作人',80],['issueTime','开票时间',5]]){
+    const value=data[k]??'';
+    if(typeof value!=='string'||value.length>max)throw new Error(label+'格式不正确');
+    if(value.trim())header[k]=value.trim();
+  }
+  if(header.issueTime&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(header.issueTime))throw new Error('开票时间格式不正确');
+  return header;
+}
+function formLine(l){
+  return {desc:l.desc,qty:String(l.qty/1000),price:moneyInput(l.price),code:l.code||'',staff:l.staff||'',expiry:l.expiry||'',discount:l.discount?moneyInput(l.discount):''};
+}
+function lineValues(r){
+  const qty=quantity(r.qty), unit=price(r.price);
+  let discount=0;
+  if(String(r.discount??'').trim()){
+    try{discount=price(r.discount,true);}catch{throw new Error('折扣金额须为非负数，最多两位小数');}
+  }
+  const gross=lineAmount(qty,unit);
+  if(!Number.isSafeInteger(gross)||gross<=0||gross>MAX)throw new Error('金额超出允许范围');
+  if(discount>gross)throw new Error('折扣金额不能超过该行原价合计');
+  return {qty,price:unit,amount:gross-discount,...(discount?{discount}:{})};
+}
+function lineDetails(r){
+  const details={};
+  for(const [k,label,max] of [['code','项目编号',40],['staff','服务人员',80],['expiry','项目到期日',10]]){
+    const value=r[k]??'';
+    if(typeof value!=='string'||value.length>max)throw new Error(label+'格式不正确');
+    if(value.trim())details[k]=value.trim();
+  }
+  if(details.expiry&&!validDay(details.expiry))throw new Error('项目到期日无效');
+  return details;
 }
 // Form text (a JSON string or rows of strings) -> stored integer lines.
 function parseLines(raw){
@@ -40,14 +76,14 @@ function parseLines(raw){
     const desc=String(r.desc ?? '').trim();
     if(!desc)fail('请填写项目描述');
     if(desc.length>120)fail('项目描述过长');
-    let qty,unit;
-    try{qty=quantity(r.qty);unit=price(r.price);}catch(e){fail(e.message);}
-    const amount=lineAmount(qty,unit);
-    if(!Number.isSafeInteger(amount)||amount<=0||amount>MAX)fail('金额超出允许范围');
-    total+=amount;
-    return {desc,qty,price:unit,amount};
+    try{
+      const line={desc,...lineValues(r),...lineDetails(r)};
+      total+=line.amount;
+      return line;
+    }catch(e){fail(e.message);}
   });
   if(!Number.isSafeInteger(total)||total>MAX)throw new Error('发票合计超出允许范围');
+  if(total===0)throw new Error('发票折后合计须大于零');
   return {lines,total};
 }
 const totalOf=inv=>inv.lines.reduce((n,l)=>n+l.amount,0);
@@ -64,9 +100,11 @@ function validate(book){
     numbers.add(key(inv.no));
     if(!Object.hasOwn(REVENUE,inv.account))fail('的收入科目无效');
     if(!Array.isArray(inv.lines)||!inv.lines.length||inv.lines.length>MAX_LINES)fail('的明细行数无效');
+    invoiceHeader(inv);
     for(const l of inv.lines){
       if(!isRecord(l)||typeof l.desc!=='string'||!l.desc.trim()||l.desc.length>120||!Number.isSafeInteger(l.qty)||l.qty<=0
-        ||!Number.isSafeInteger(l.price)||l.price<=0||!Number.isSafeInteger(l.amount)||l.amount!==lineAmount(l.qty,l.price))fail('的明细金额无效');
+        ||!Number.isSafeInteger(l.price)||l.price<=0||!Number.isSafeInteger(l.amount)||l.amount<0||!Number.isSafeInteger(l.discount??0)||(l.discount??0)<0||l.amount!==lineAmount(l.qty,l.price)-(l.discount??0))fail('的明细金额无效');
+      lineDetails(l);
     }
     const total=totalOf(inv), open=t.biz?.events?.[0];
     if(!Number.isSafeInteger(total)||total<=0||total>MAX)fail('的合计金额无效');
@@ -117,6 +155,19 @@ function summary(book,through,asOf=through){
   }
   return {invoices,totals};
 }
+function printData(x){
+  const payments=new Map();
+  const add=(label,amount)=>payments.set(label,(payments.get(label)||0)+amount);
+  for(const {txn,amount} of x.applications){
+    add(txn.groups.flat().some(l=>l.a==='1000')?(txn.p?.paymentMethod||'已收款'):'抵扣',amount);
+  }
+  for(const {cash,cancel} of x.returns){
+    if(cash)add('已退款',-cash);
+    if(cancel)add('已沖減',cancel);
+  }
+  return {no:x.no,date:x.date,partyName:x.partyName,partyId:x.partyId,...invoiceHeader(x.txn.inv),
+    lines:x.lines,amount:x.amount,balance:x.balance,payments:[...payments]};
+}
 function customers(book){
   const seen=new Map();
   for(const p of Business.summary(book).parties)if(['receivable','customerAdvance'].includes(p.ledger)&&!seen.has(key(p.id)))seen.set(key(p.id),{id:p.id,name:p.name});
@@ -127,6 +178,32 @@ const qtyText=n=>(n/1000).toLocaleString('en-US',{maximumFractionDigits:3});
 
 /* ---------- browser workspace ---------- */
 const btn=(action,label,attrs='',cls='btn')=>`<button type="button" class="${cls}" data-inv-act="${action}"${attrs}>${label}</button>`;
+function displayLines(lines,money){
+  return `<thead><tr><th scope="col">项目描述</th><th scope="col">数量</th><th scope="col">单价</th><th scope="col">折扣</th><th scope="col">金额</th></tr></thead>
+    <tbody>${lines.map(l=>{
+      const detail=[l.code,l.staff,l.expiry?'到期日 '+l.expiry:''].filter(Boolean).join(' / ');
+      return `<tr><th scope="row">${esc(l.desc)}${detail?`<small>${esc(detail)}</small>`:''}</th><td>${qtyText(l.qty)}</td><td>${money(l.price)}</td><td>${money(l.discount||0)}</td><td>${money(l.amount)}</td></tr>`;
+    }).join('')}</tbody>`;
+}
+function headerInputs(prefix,f){
+  return [['branch','分店',60],['maker','制作人',80],['issueTime','开票时间',5]].map(([k,label,max])=>
+    `<label class="field">${label}<input id="${prefix}-${k}" data-${prefix}-field="${k}" type="${k==='issueTime'?'time':'text'}" maxlength="${max}" value="${esc(f[k])}"></label>`).join('');
+}
+function itemEditor(prefix,lines,amounts,total,currency,money,button){
+  const rows=lines.map((line,i)=>{
+    const field=(key,label,attrs='')=>`<label class="field">${label}<input id="${prefix}-${key}-${i}" data-${prefix}-line="${i}" data-k="${key}" value="${esc(line[key])}" autocomplete="off" ${attrs}></label>`;
+    const remove=lines.length>1?button('line-del','删除',` data-index="${i}" aria-label="删除第 ${i+1} 行"`,'btn small'):'';
+    return `<fieldset class="salon-item"><legend>项目 ${i+1}</legend>
+      ${field('desc','项目描述','maxlength="120" placeholder="商品或服务内容"')}
+      <div class="salon-item-grid">${field('code','项目编号','maxlength="40"')}${field('staff','服务人员','maxlength="80"')}${field('expiry','项目到期日','type="date"')}</div>
+      <div class="salon-item-grid">${field('qty','数量','inputmode="decimal"')}${field('price','单价','inputmode="decimal"')}${field('discount','整行折扣','inputmode="decimal" placeholder="0"')}</div>
+      <div class="salon-item-end">${remove}<span>金额 <strong data-${prefix}-amount="${i}">${amounts[i]==null?'—':money(amounts[i])}</strong></span></div>
+    </fieldset>`;
+  }).join('');
+  return `<section class="salon-editor-items"><h4>项目明细</h4>${rows}
+    <div class="salon-item-total">${button('line-add','＋ 添加一行',lines.length>=MAX_LINES?' disabled':'','btn small')}
+    <span>发票合计 · ${esc(currency)} <strong id="${prefix}-total">${money(total)}</strong></span></div></section>`;
+}
 class InvoiceWorkspace {
   // The company's chart may rename and renumber accounts; the page passes accountName/accountLabel (escaped HTML).
   acctName(code){ return this.accountName ? this.accountName(code) : code===RECEIVABLE ? '应收账款' : REVENUE[code]; }
@@ -244,7 +321,7 @@ class InvoiceWorkspace {
     const r=this.reviews.list().find(x=>x.id===id&&x.status==='pending'&&!x.mine);
     if(!r)return;
     this.form={...this.blank(),partyId:r.data.partyId,partyName:r.data.partyName,date:r.data.date,dueDate:r.data.dueDate,
-      lines:r.data.lines.map(l=>({desc:l.desc,qty:String(l.qty/1000),price:(l.price/100).toFixed(2)})),
+      ...invoiceHeader(r.data),maker:r.data.maker||r.requester,issueTime:r.data.issueTime||'',lines:r.data.lines.map(formLine),
       request:{id:r.id,requester:r.requester,note:r.data.note,total:r.data.total,at:r.updatedAt}};
     this.renderForm();
     this.modal.querySelector('#inv-no')?.focus();
@@ -271,7 +348,7 @@ class InvoiceWorkspace {
       <div class="receipt-context"><div><strong>${esc(invoice.no)}</strong><span>${esc(invoice.partyName)}</span></div><div><span>未收余额</span><strong>${esc(this.cur())} ${this.money(invoice.balance)}</strong></div></div>
       <div class="fields receipt-fields"><div class="field"><label for="receipt-date">收款日期</label><input id="receipt-date" type="date" min="${invoice.date}" max="${year}-12-31" value="${date}"></div>
       <div class="field"><label for="receipt-amount">本次收款金额（${esc(this.cur())}）</label><input id="receipt-amount" inputmode="decimal" autocomplete="off" value="${(invoice.balance/100).toFixed(2)}"></div>
-      <div class="field full"><label for="receipt-account">到账账户</label><select id="receipt-account">${accounts.length>1?'<option value="">选择实际到账账户</option>':''}${accounts.map(a=>`<option value="${esc(a.id)}">${this.cashOption(a)}</option>`).join('')}</select></div></div>
+      <label class="field">付款方式（选填）<input id="receipt-method" maxlength="60" placeholder="如 支付寶、現金"></label><div class="field full"><label for="receipt-account">到账账户</label><select id="receipt-account">${accounts.length>1?'<option value="">选择实际到账账户</option>':''}${accounts.map(a=>`<option value="${esc(a.id)}">${this.cashOption(a)}</option>`).join('')}</select></div></div>
       <p class="hint">确认后会生成收款凭证并冲减未收余额。已导入银行对账单时，也可${btn('receipt-bank','从银行流水核销','','text-button')}。</p>
       <p id="receipt-error" class="err" role="alert" tabindex="-1"></p>
       <div class="actions">${btn('receipt-save','确认收款',` data-id="${esc(invoice.id)}"`,'btn primary')}<button class="btn" data-act="closeModal">取消</button></div>`, 'receipt-dialog');
@@ -279,7 +356,7 @@ class InvoiceWorkspace {
   }
   saveReceipt(id){
     const field=name=>this.modal.querySelector('#receipt-'+name).value;
-    const date=field('date'), error=this.receive(id,{date,amount:field('amount').trim(),cashAccount:field('account')});
+    const date=field('date'), error=this.receive(id,{date,amount:field('amount').trim(),cashAccount:field('account'),paymentMethod:field('method').trim()});
     if(error){const message=this.modal.querySelector('#receipt-error');message.textContent=Locale.text(error);message.focus();return;}
     this.month=Math.max(this.month,E.monthOf(date));
     this.modal.hidden=true;
@@ -289,7 +366,7 @@ class InvoiceWorkspace {
   }
   blank(){
     const book=this.book();
-    return {editId:null,partyId:'',partyName:'',date:this.entryDate(),dueDate:'',no:nextNumber(book),account:'4100',memo:'',lines:[{desc:'',qty:'1',price:''}]};
+    return {maker:this.currentMaker?.()||'',issueTime:new Date().toTimeString().slice(0,5),editId:null,partyId:'',partyName:'',date:this.entryDate(),dueDate:'',no:nextNumber(book),account:'4100',memo:'',lines:[{desc:'',qty:'1',price:''}]};
   }
   openForm(id,copy=false){
     if(!this.canWrite())return;
@@ -298,7 +375,7 @@ class InvoiceWorkspace {
     if(txn&&!copy&&this.lockedDate(txn.date)){this.toast('此发票所在期间已锁定，请先反结账。');return;}
     this.form=txn?{editId:copy?null:txn.id,partyId:txn.biz.events[0].partyId,partyName:txn.biz.events[0].partyName,date:copy?this.entryDate():txn.date,
       dueDate:copy?'':txn.biz.events[0].dueDate||'',no:copy?nextNumber(book):txn.inv.no,account:txn.inv.account,memo:txn.memoUser||'',
-      lines:txn.inv.lines.map(l=>({desc:l.desc,qty:String(l.qty/1000),price:(l.price/100).toFixed(2)}))}:this.blank();
+      ...invoiceHeader(txn.inv),lines:txn.inv.lines.map(formLine)}:this.blank();
     this.renderForm();
     this.modal.querySelector('#inv-party-id')?.focus();
   }
@@ -306,7 +383,7 @@ class InvoiceWorkspace {
     let total=0,error='';
     const amounts=this.form.lines.map(l=>{
       if(![l.desc,l.qty,l.price].some(v=>String(v).trim()))return null;
-      try{const amount=lineAmount(quantity(l.qty),price(l.price));total+=amount;return amount;}catch(e){error||=e.message;return null;}
+      try{const {amount}=lineValues(l);total+=amount;return amount;}catch(e){error||=e.message;return null;}
     });
     return {amounts,total,error};
   }
@@ -317,28 +394,23 @@ class InvoiceWorkspace {
   }
   renderForm(){
     const f=this.form, {amounts,total}=this.totals(), people=customers(this.book());
-    const lines=f.lines.map((l,i)=>`<tr><td><label class="sr-only" for="inv-desc-${i}">第 ${i+1} 行项目描述</label><input id="inv-desc-${i}" data-inv-line="${i}" data-k="desc" value="${esc(l.desc)}" maxlength="120" placeholder="商品或服务内容" autocomplete="off"></td>
-      <td><label class="sr-only" for="inv-qty-${i}">第 ${i+1} 行数量</label><input id="inv-qty-${i}" data-inv-line="${i}" data-k="qty" value="${esc(l.qty)}" inputmode="decimal" autocomplete="off"></td>
-      <td><label class="sr-only" for="inv-price-${i}">第 ${i+1} 行单价</label><input id="inv-price-${i}" data-inv-line="${i}" data-k="price" value="${esc(l.price)}" inputmode="decimal" autocomplete="off"></td>
-      <td class="inv-amount" data-inv-amount="${i}">${amounts[i]==null?'—':this.money(amounts[i])}</td><td>${f.lines.length>1?btn('line-del','删除',` data-index="${i}" aria-label="删除第 ${i+1} 行"`,'btn small'):''}</td></tr>`).join('');
     const q=f.request;
     this.dialog(`<h3 id="invoice-dialog-title">${q?'审核销售发票申请':f.editId?'修改销售发票':'新建销售发票'}</h3>
       ${q?`<p class="period-notice">由 ${esc(q.requester)} 提交 · 申请金额 ${this.money(q.total)}${q.note?` · 说明：${esc(q.note)}`:''}</p><p class="tdesc">请核对客户和明细，确认发票号和收入科目。批准后系统按下方分录记账；如需修改可直接改，或退回给销售。</p>`
         :'<p class="tdesc">保存后系统自动把这张发票记入销售收入和客户应收账款，无需再手工做分录。</p>'}
+      <div class="salon-editor-columns"><section class="salon-editor-info"><h4>开票资料</h4>
       <div class="fields"><div class="field"><label for="inv-party-id">客户编号</label><input id="inv-party-id" data-inv-field="partyId" value="${esc(f.partyId)}" maxlength="80" list="inv-customers" placeholder="如 C001" autocomplete="off"><datalist id="inv-customers">${people.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</datalist></div>
         <div class="field"><label for="inv-party-name">客户名称</label><input id="inv-party-name" data-inv-field="partyName" value="${esc(f.partyName)}" maxlength="80" autocomplete="off"></div>
         <div class="field"><label for="inv-date">开票日期</label><input id="inv-date" data-inv-field="date" type="date" value="${esc(f.date)}"></div>
         <div class="field"><label for="inv-due">到期日（选填）</label><input id="inv-due" data-inv-field="dueDate" type="date" value="${esc(f.dueDate)}"></div>
         <div class="field"><label for="inv-no">发票号</label><input id="inv-no" data-inv-field="no" value="${esc(f.no)}" maxlength="40" autocomplete="off"></div>
-        <div class="field"><label for="inv-account">记入收入科目</label><select id="inv-account" data-inv-field="account">${Object.keys(REVENUE).filter(code=>code===f.account || !this.accountHidden?.(code)).map(code=>`<option value="${code}"${code===f.account?' selected':''}>${this.acctLabel(code)}</option>`).join('')}</select></div></div>
-      <div class="scroll"><table class="enterprise-table invoice-lines"><thead><tr><th scope="col">项目描述</th><th scope="col">数量</th><th scope="col">单价</th><th scope="col">金额</th><th scope="col"><span class="sr-only">操作</span></th></tr></thead><tbody>${lines}</tbody>
-        <tfoot><tr><th scope="row" colspan="3">发票合计 · ${esc(this.cur())}</th><td class="inv-amount"><strong id="inv-total">${this.money(total)}</strong></td><td></td></tr></tfoot></table></div>
-      <div class="actions">${btn('line-add','＋ 添加一行',f.lines.length>=MAX_LINES?' disabled':'','btn small')}</div>
+        <div class="field"><label for="inv-account">记入收入科目</label><select id="inv-account" data-inv-field="account">${Object.keys(REVENUE).filter(code=>code===f.account || !this.accountHidden?.(code)).map(code=>`<option value="${code}"${code===f.account?' selected':''}>${this.acctLabel(code)}</option>`).join('')}</select></div>${headerInputs('inv',f)}</div>
       <div class="field full"><label for="inv-memo">摘要（留空则自动生成）</label><input id="inv-memo" data-inv-field="memo" value="${esc(f.memo)}" maxlength="120" autocomplete="off"></div>
       <div class="preview" id="inv-preview">${this.previewHTML()}</div>
+      </section>${itemEditor('inv',f.lines,amounts,total,this.cur(),n=>this.money(n),btn)}</div>
       ${q?`<div class="field full" id="inv-reject" hidden><label for="inv-reject-note">退回原因（销售会看到）</label><textarea id="inv-reject-note" rows="2" maxlength="300"></textarea></div>`:''}
       <p class="err" id="inv-error" role="alert"></p>
-      <div class="actions">${btn('save',q?'批准并过账':f.editId?'保存修改':'保存并记账','','btn primary')}${q?btn('reject','退回给销售'):''}<button type="button" class="btn" data-act="closeModal">取消</button></div>`);
+      <div class="actions">${btn('save',q?'批准并过账':f.editId?'保存修改':'保存并记账','','btn primary')}${q?btn('reject','退回给销售'):''}<button type="button" class="btn" data-act="closeModal">取消</button></div>`,'salon-editor');
   }
   refreshTotals(){
     const {amounts,total}=this.totals();
@@ -369,10 +441,10 @@ class InvoiceWorkspace {
   save(){
     const f=this.form;if(!f)return;
     const show=text=>{const error=this.modal.querySelector('#inv-error');if(error)error.textContent=Locale.text(text);};
-    let parsed;
-    try{parsed=parseLines(f.lines);}catch(e){show(e.message);return;}
+    let parsed,header;
+    try{parsed=parseLines(f.lines);header=invoiceHeader(f);}catch(e){show(e.message);return;}
     const message=this.post({date:f.date,dueDate:f.dueDate,partyId:f.partyId,partyName:f.partyName,invNo:f.no,account:f.account,memo:f.memo,
-      lines:JSON.stringify(parsed.lines.map((l,i)=>({desc:l.desc,qty:String(l.qty/1000),price:(l.price/100).toFixed(2)})))},f.editId,f.request?.id);
+      ...header,lines:JSON.stringify(parsed.lines.map(formLine))},f.editId,f.request?.id);
     if(message){show(message);return;}
     this.form=null;this.modal.hidden=true;this.render();
   }
@@ -384,19 +456,16 @@ class InvoiceWorkspace {
       .sort((a,b)=>a.txn.date.localeCompare(b.txn.date)||a.txn.seq-b.txn.seq);
     this.dialog(`<article class="invoice-doc"><header><div><p class="inv-company">${esc(company.name)}</p><h3 id="invoice-dialog-title">销售发票 <small>INVOICE</small></h3></div><dl><div><dt>发票号</dt><dd>${esc(x.no)}</dd></div><div><dt>开票日期</dt><dd>${esc(x.date)}</dd></div><div><dt>到期日</dt><dd>${x.dueDate?esc(x.dueDate):'—'}</dd></div><div><dt>状态</dt><dd>${this.badge(x)}</dd></div></dl></header>
       <p class="inv-billto"><span>客户</span><strong>${esc(x.partyName)}</strong><small>编号 ${esc(x.partyId)}</small></p>
-      <table class="enterprise-table invoice-lines"><thead><tr><th scope="col">项目描述</th><th scope="col">数量</th><th scope="col">单价</th><th scope="col">金额</th></tr></thead><tbody>${x.lines.map(l=>`<tr><th scope="row">${esc(l.desc)}</th><td>${qtyText(l.qty)}</td><td>${this.money(l.price)}</td><td>${this.money(l.amount)}</td></tr>`).join('')}</tbody>
-        <tfoot><tr><th scope="row" colspan="3">发票合计 · ${esc(company.cur)}</th><td><strong>${this.money(x.amount)}</strong></td></tr><tr><th scope="row" colspan="3">已收款 / 已冲减</th><td>${this.money(x.settled)}</td></tr><tr><th scope="row" colspan="3">未收余额</th><td><strong>${this.money(x.balance)}</strong></td></tr></tfoot></table>
+      <div class="scroll"><table class="enterprise-table invoice-lines">${displayLines(x.lines,n=>this.money(n))}
+        <tfoot><tr><th scope="row" colspan="4">发票合计 · ${esc(company.cur)}</th><td><strong>${this.money(x.amount)}</strong></td></tr><tr><th scope="row" colspan="4">已收款 / 已冲减</th><td>${this.money(x.settled)}</td></tr><tr><th scope="row" colspan="4">未收余额</th><td><strong>${this.money(x.balance)}</strong></td></tr></tfoot></table></div>
       <div class="inv-posting"><p>已自动记账 · 凭证 ${esc(x.id)}：借 ${this.acctName(RECEIVABLE)} ${this.money(x.amount)} / 贷 ${this.acctName(x.account)} ${this.money(x.amount)}</p>
         ${history.length?`<ul>${history.map(h=>`<li>${esc(h.txn.date)} · ${h.label} ${esc(h.txn.id)} · ${this.money(h.amount)}</li>`).join('')}</ul>`:'<p>尚无收款记录。</p>'}</div></article>
-      <div class="actions invoice-actions">${btn('print','打印 / PDF','','btn primary')}${btn('voucher','查看凭证',` data-id="${esc(x.id)}"`)}${x.balance>0&&writable?btn('receive','收款',` data-id="${esc(x.id)}"`):''}<button type="button" class="btn" data-act="closeModal">关闭</button></div>`,'invoice-view');
+      <div class="actions invoice-actions">${btn('print','打印发票 / PDF',` data-id="${esc(x.id)}"`,'btn primary')}${btn('voucher','查看凭证',` data-id="${esc(x.id)}"`)}${x.balance>0&&writable?btn('receive','收款',` data-id="${esc(x.id)}"`):''}<button type="button" class="btn" data-act="closeModal">关闭</button></div>`,'invoice-view');
     this.modal.querySelector('[data-inv-act="print"]')?.focus();
   }
-  print(){
-    const done=()=>{document.body.classList.remove('print-invoice');window.removeEventListener('afterprint',done);};
-    document.body.classList.add('print-invoice');
-    window.addEventListener('afterprint',done);
-    try{window.print();}catch(e){done();}
-    setTimeout(done,60000);
+  print(id){
+    const invoice=summary(this.book()).invoices.find(x=>x.id===id);
+    if(invoice)window.SalonInvoicePrint.open(printData(invoice),this.cur());
   }
   click(el){
     const {invAct,value,id,index}=el.dataset;
@@ -410,7 +479,7 @@ class InvoiceWorkspace {
     else if(invAct==='new')this.openForm();
     else if(invAct==='edit')this.openForm(id);
     else if(invAct==='view')this.view(id);
-    else if(invAct==='print')this.print();
+    else if(invAct==='print')this.print(id);
     else if(invAct==='voucher'){this.modal.hidden=true;this.openVoucher(id);}
     else if(invAct==='receive'){
       const x=summary(this.book(),this.period().through).invoices.find(v=>v.id===id);
@@ -437,5 +506,5 @@ class InvoiceWorkspace {
     }
   }
 }
-window.AccountingInvoices={TPL,REVENUE,STATUS,MAX_LINES,linked,parseLines,validate,numberTaken,nextNumber,summary,customers,Workspace:InvoiceWorkspace};
+window.AccountingInvoices={TPL,REVENUE,STATUS,MAX_LINES,linked,parseLines,invoiceHeader,formLine,lineValues,displayLines,headerInputs,itemEditor,printData,validate,numberTaken,nextNumber,summary,customers,Workspace:InvoiceWorkspace};
 })();

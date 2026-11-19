@@ -10,7 +10,7 @@ import { createDemoWorkspaces } from './demo-workspace.mjs';
 // Deliberate allowlist: never expose the project directory or credential files.
 const publicFiles = new Map([
   ['/', ['index.html','text/html']], ['/index.html', ['index.html','text/html']],
-  ...['base.css','workspace.css','console.css','opencc-cn2t.js','locale.js','ai-client.js','personal-space.js','report-editor.js','enterprise.js','bank-reconciliation.js','bank-workspace.js','membership.js','business-workflows.js','sales-invoices.js','company.js','inventory.js','fixed-assets.js','chart.js','ledger-guide.js','payroll.js','payroll.css','tutorial-content.js','tutorial.js','tutorial.css','training-content.js','training.js','training.css','app.js'].map(name => ['/assets/'+name, ['assets/'+name,name.endsWith('.css') ? 'text/css' : 'text/javascript']]),
+  ...['base.css','workspace.css','console.css','opencc-cn2t.js','locale.js','ai-client.js','personal-space.js','report-editor.js','enterprise.js','bank-reconciliation.js','bank-workspace.js','membership.js','business-workflows.js','sales-invoices.js','salon-invoice-print.js','salon-invoice.css','company.js','inventory.js','fixed-assets.js','chart.js','ledger-guide.js','payroll.js','payroll.css','tutorial-content.js','tutorial.js','tutorial.css','training-content.js','training.js','training.css','app.js'].map(name => ['/assets/'+name, ['assets/'+name,name.endsWith('.css') ? 'text/css' : 'text/javascript']]),
 ]);
 
 function sameToken(a, b) {

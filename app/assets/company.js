@@ -200,35 +200,31 @@ class SalesPortal {
     }catch(error){$('#sales-customer-error').textContent=L.text(error.message);}
     finally{button.disabled=false;}
   }
-  blank(){ return {id:null,partyId:'',partyName:'',date:today(),dueDate:'',note:'',lines:[{desc:'',qty:'1',price:''}]}; }
+  blank(){ return {maker:this.user?.()?.name||'',issueTime:new Date().toTimeString().slice(0,5),id:null,partyId:'',partyName:'',date:today(),dueDate:'',note:'',lines:[{desc:'',qty:'1',price:''}]}; }
   openForm(id){
     const r=id&&this.data.requests.find(x=>x.id===id&&x.status!=='approved');
     if(id&&!r)return;
     this.form=r?{id:r.id,partyId:r.data.partyId,partyName:r.data.partyName,date:r.data.date,dueDate:r.data.dueDate,note:r.data.note,
-      lines:r.data.lines.map(l=>({desc:l.desc,qty:String(l.qty/1000),price:(l.price/100).toFixed(2)}))}:this.blank();
+      ...Inv.invoiceHeader(r.data),lines:r.data.lines.map(Inv.formLine)}:this.blank();
     this.source=r||null;
     this.renderForm();
   }
-  lineAmount(l){ try { return Inv.parseLines([l]).total; } catch { return null; } }
+  lineAmount(l){ try { return Inv.lineValues(l).amount; } catch { return null; } }
   renderForm(r=this.source){
-    const f=this.form, people=this.data.customers, cur=esc(this.data.company?.cur||'');
-    const lines=f.lines.map((l,i)=>`<tr><td><label class="sr-only" for="sales-desc-${i}">第 ${i+1} 行项目描述</label><input id="sales-desc-${i}" data-sales-line="${i}" data-k="desc" value="${esc(l.desc)}" maxlength="120" placeholder="商品或服务内容" autocomplete="off"></td>
-      <td><label class="sr-only" for="sales-qty-${i}">第 ${i+1} 行数量</label><input id="sales-qty-${i}" data-sales-line="${i}" data-k="qty" value="${esc(l.qty)}" inputmode="decimal" autocomplete="off"></td>
-      <td><label class="sr-only" for="sales-price-${i}">第 ${i+1} 行单价</label><input id="sales-price-${i}" data-sales-line="${i}" data-k="price" value="${esc(l.price)}" inputmode="decimal" autocomplete="off"></td>
-      <td class="inv-amount" data-sales-amount="${i}">${this.lineAmount(l)==null?'—':money(this.lineAmount(l))}</td><td>${f.lines.length>1?sbtn('line-del','删除',` data-index="${i}" aria-label="删除第 ${i+1} 行"`,'btn small'):''}</td></tr>`).join('');
+    const f=this.form, people=this.data.customers;
+    const amounts=f.lines.map(line=>this.lineAmount(line));
     dialog(`<h3 id="company-dialog-title">${f.id?'修改发票申请':'新建发票申请'}</h3>
       <p class="tdesc">提交后由会计审核：会计确认发票号和收入科目后过账，你可以在列表里看到审核结果和客户付款情况。</p>
       ${r?.status==='rejected'?`<p class="period-notice">会计退回原因：${esc(r.reviewNote)}</p>`:''}
+      <div class="salon-editor-columns"><section class="salon-editor-info"><h4>开票资料</h4>
       <div class="fields"><div class="field"><label for="sales-party-id">客户编号</label><input id="sales-party-id" data-sales-field="partyId" value="${esc(f.partyId)}" maxlength="80" list="sales-customers" placeholder="如 C001" autocomplete="off"><datalist id="sales-customers">${people.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</datalist></div>
         <div class="field"><label for="sales-party-name">客户名称</label><input id="sales-party-name" data-sales-field="partyName" value="${esc(f.partyName)}" maxlength="80" autocomplete="off"></div>
         <div class="field"><label for="sales-date">开票日期</label><input id="sales-date" data-sales-field="date" type="date" value="${esc(f.date)}"></div>
-        <div class="field"><label for="sales-due">到期日（选填）</label><input id="sales-due" data-sales-field="dueDate" type="date" value="${esc(f.dueDate)}"></div></div>
-      <div class="scroll"><table class="enterprise-table invoice-lines"><thead><tr><th scope="col">项目描述</th><th scope="col">数量</th><th scope="col">单价</th><th scope="col">金额</th><th scope="col"><span class="sr-only">操作</span></th></tr></thead><tbody>${lines}</tbody>
-        <tfoot><tr><th scope="row" colspan="3">合计 · ${cur}</th><td class="inv-amount"><strong id="sales-total">${money(this.total())}</strong></td><td></td></tr></tfoot></table></div>
-      <div class="actions">${sbtn('line-add','＋ 添加一行',f.lines.length>=Inv.MAX_LINES?' disabled':'','btn small')}</div>
+        <div class="field"><label for="sales-due">到期日（选填）</label><input id="sales-due" data-sales-field="dueDate" type="date" value="${esc(f.dueDate)}"></div>${Inv.headerInputs('sales',f)}</div>
       <div class="field full"><label for="sales-note">给会计的说明（选填）</label><textarea id="sales-note" data-sales-field="note" rows="2" maxlength="500">${esc(f.note)}</textarea></div>
+      </section>${Inv.itemEditor('sales',f.lines,amounts,this.total(),this.data.company?.cur||'',money,sbtn)}</div>
       <p class="err" id="sales-error" role="alert"></p>
-      <div class="actions">${sbtn('submit',f.id?'重新提交审核':'提交审核','','btn primary')}<button type="button" class="btn" data-act="closeModal">取消</button></div>`,'invoice-dialog');
+      <div class="actions">${sbtn('submit',f.id?'重新提交审核':'提交审核','','btn primary')}<button type="button" class="btn" data-act="closeModal">取消</button></div>`,'invoice-dialog salon-editor');
   }
   total(){ return this.form.lines.reduce((n,l)=>n+(this.lineAmount(l)||0),0); }
   input(el){
@@ -254,7 +250,7 @@ class SalesPortal {
     if(!f)return;
     button.disabled=true;
     try {
-      const body={partyId:f.partyId,partyName:f.partyName,date:f.date,dueDate:f.dueDate,note:f.note,lines:f.lines};
+      const body={partyId:f.partyId,partyName:f.partyName,date:f.date,dueDate:f.dueDate,note:f.note,...Inv.invoiceHeader(f),lines:f.lines};
       if(f.id)await this.request('sales/requests/'+f.id,'PUT',body); else await this.request('sales/requests','POST',body);
       this.form=null; $('#modal').hidden=true; this.filter='all'; await this.load();
     } catch(e){ if(error)error.textContent=L.text(e.message||'提交未成功，请重试。'); }
@@ -266,9 +262,9 @@ class SalesPortal {
     dialog(`<h3 id="company-dialog-title">发票申请 · ${esc(d.partyName)}</h3>
       <dl class="sales-facts"><div><dt>状态</dt><dd>${this.statusHTML(r)}</dd></div><div><dt>客户</dt><dd>${esc(d.partyName)} · ${esc(d.partyId)}</dd></div><div><dt>开票日期</dt><dd>${esc(d.date)}</dd></div><div><dt>到期日</dt><dd>${d.dueDate?esc(d.dueDate):'—'}</dd></div>
         ${x?`<div><dt>发票号</dt><dd>${esc(x.no)}</dd></div><div><dt>已收 / 未收</dt><dd>${money(x.settled)} / ${money(x.balance)}</dd></div>`:''}</dl>
-      <table class="enterprise-table invoice-lines"><thead><tr><th scope="col">项目描述</th><th scope="col">数量</th><th scope="col">单价</th><th scope="col">金额</th></tr></thead><tbody>${d.lines.map(l=>`<tr><th scope="row">${esc(l.desc)}</th><td>${(l.qty/1000).toLocaleString('en-US',{maximumFractionDigits:3})}</td><td>${money(l.price)}</td><td>${money(l.amount)}</td></tr>`).join('')}</tbody>
-        <tfoot><tr><th scope="row" colspan="3">合计</th><td><strong>${money(d.total)}</strong></td></tr></tfoot></table>
-      ${d.note?`<p class="hint">说明：${esc(d.note)}</p>`:''}<div class="actions">${closeButton}</div>`,'invoice-dialog');
+      <div class="scroll"><table class="enterprise-table invoice-lines">${Inv.displayLines(d.lines,money)}
+        <tfoot><tr><th scope="row" colspan="4">合计</th><td><strong>${money(d.total)}</strong></td></tr></tfoot></table></div>
+      ${d.note?`<p class="hint">说明：${esc(d.note)}</p>`:''}<div class="actions">${x?.print?sbtn('print','打印发票 / PDF',` data-id="${esc(id)}"`,'btn primary'):''}${closeButton}</div>`,'invoice-dialog');
   }
   confirmWithdraw(id){
     const r=this.data.requests.find(x=>x.id===id&&x.status!=='approved'); if(!r)return;
@@ -294,6 +290,7 @@ class SalesPortal {
     else if(action==='new')this.openForm();
     else if(action==='edit')this.openForm(id);
     else if(action==='view')this.view(id);
+    else if(action==='print'){const data=this.data.requests.find(r=>r.id===id)?.invoice?.print;if(data)window.SalonInvoicePrint.open(data,this.data.company.cur);}
     else if(action==='withdraw')this.confirmWithdraw(id);
     else if(action==='withdraw-confirm')this.withdraw(id,el);
     else if(action==='line-add'&&this.form&&this.form.lines.length<Inv.MAX_LINES){this.form.lines.push({desc:'',qty:'1',price:''});this.renderForm();$(`#sales-desc-${this.form.lines.length-1}`)?.focus();}

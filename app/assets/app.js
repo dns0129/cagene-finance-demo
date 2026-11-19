@@ -549,12 +549,12 @@ TEMPLATES.push(
       if(dueDate&&dueDate<p.date)return bad('到期日不能早于开票日期');
       let parsed;try{parsed=Invoices.parseLines(p.lines);}catch(e){return bad(e.message);}
       return ok([[D('1100',parsed.total),C(p.account,parsed.total)]],{biz:{v:1,events:[{kind:'open',ledger:'receivable',partyId,partyName,amount:parsed.total,dueDate}]},
-        inv:{v:1,no,account:p.account,lines:parsed.lines},party:partyName,calc:`${parsed.lines.length} 行明细，合计 ${m$(parsed.total)}`});}},
+        inv:{v:1,no,account:p.account,...Invoices.invoiceHeader(p),lines:parsed.lines},party:partyName,calc:`${parsed.lines.length} 行明细，合计 ${m$(parsed.total)}`});}},
   {id:'customerCashSale',cat:'customer',zh:'客户服务现收款',fields:[F.amt('服务实收金额'),...partyFields('客户')],
     memo:p=>`客户 ${p.partyName||''} 服务现收 ${m$(money(p.amt))}`,note:'服务已经履行并收到款项，保留客户和原单据以便后续退款追溯。',
     build(p){const a=money(p.amt),partyId=String(p.partyId||'').trim(),partyName=String(p.partyName||'').trim();if(!pos(a)||!partyId||!partyName)return bad('请填写金额、客户编号和名称');
       return ok([[D('1000',a),C('4100',a)]],{biz:{v:1,events:[{kind:'open',ledger:'receivable',partyId,partyName,amount:a,dueDate:p.dueDate||''},{kind:'apply',ledger:'receivable',allocations:[{id:'$self:0',amount:a}]}]},party:partyName});}},
-  {id:'customerReceipt',cat:'customer',zh:'客户收款并核销',fields:[allocField('receivable')],
+  {id:'customerReceipt',cat:'customer',zh:'客户收款并核销',fields:[allocField('receivable'),{k:'paymentMethod',t:'text',max:60,label:'付款方式（选填）'}],
     memo:()=>`收取并核销客户应收款`,note:'一笔收款可分配到同一客户的多张应收单据；允许部分核销。',
     build:(p,ctx)=>applyBusiness(p,ctx,'receivable','1000','1100')},
   {id:'customerRefund',cat:'customer',zh:'客户服务退款 / 冲减应收',fields:[{k:'sourceId',t:'businessDoc',ledger:'receivable',label:'关联原销售凭证'},F.amt('冲减尚未收回的应收','cancel'),F.amt('实际退回客户款项','cash')],
@@ -2783,7 +2783,7 @@ function settleBankInvoices({month, account, index, allocations}){
   toast(saved ? `已记收款 ${id} 并核销 ${nos.join('、')}，流水已匹配。` : '收款已加入当前账本，但保存失败，请立即备份。', () => restore(snap));
   return '';
 }
-function postInvoiceReceipt(id,{date,amount,cashAccount}){
+function postInvoiceReceipt(id,{date,amount,cashAccount,paymentMethod}){
   const err=dateError(date);
   if(err)return err;
   if(EBook.locked(S,date))return '收款日期所在期间已锁定，请核对日期或先反结账。';
@@ -2798,7 +2798,7 @@ function postInvoiceReceipt(id,{date,amount,cashAccount}){
   const r=runTpl(S,'customerReceipt',p,null);
   if(r.err)return r.err;
   const memo=`发票收款 · ${invoice.no} · ${invoice.partyName}`.slice(0,120);
-  const tx={date,tpl:'customerReceipt',p:{cashAccount,allocations:p.allocations},party:r.party,ref:invoice.no,memo,memoUser:memo,adj:false,groups:r.groups,shares:0,biz:r.biz};
+  const tx={date,tpl:'customerReceipt',p:{cashAccount,allocations:p.allocations,...(paymentMethod?{paymentMethod}:{})},party:r.party,ref:invoice.no,memo,memoUser:memo,adj:false,groups:r.groups,shares:0,biz:r.biz};
   return commit(tx,{independent:true}) ? '' : '收款凭证未能记账，请查看页面提示。';
 }
 function editTx(id){
@@ -3680,7 +3680,7 @@ function bootLedger(){
     download:(filename,data)=>downloadFile(filename,data,'text/csv;charset=utf-8')});
   invoiceWorkspace=new Invoices.Workspace({
     accountName:code=>acctName(code), accountLabel:code=>`${esc(acode(code))} ${acctName(code)}`, accountHidden:code=>!!ACC[code]?.off,
-    root:$('#invoicePane'),modal:$('#modal'),book:()=>S,post:postInvoice,toast,format:fmt,today,entryDate,openVoucher:jump,
+    currentMaker:()=>workspace?.user?.name||'',root:$('#invoicePane'),modal:$('#modal'),book:()=>S,post:postInvoice,toast,format:fmt,today,entryDate,openVoucher:jump,
     receive:postInvoiceReceipt,cashAccounts:()=>Chart.cashAccounts(S),cashOption,openBank:()=>navigateSection('bank'),
     canWrite:canWriteLedger,lockedDate:date=>EBook.locked(S,date),
     reviews:reviewer()?{batch:workspace.user.role==='accountant'?async input=>{

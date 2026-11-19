@@ -122,10 +122,10 @@ function requestInput(input){
   const dueDate=text('dueDate',10,'到期日',false), note=text('note',500,'备注',false);
   if(!validDay(date)) fail(400,'invalid_request','开票日期格式不正确。');
   if(dueDate && (!validDay(dueDate) || dueDate<date)) fail(400,'invalid_request','到期日不能早于开票日期。');
-  let parsed;
-  try { parsed=parseLines(Array.isArray(input.lines)?input.lines:[]); }
+  let parsed,header;
+  try { header=Invoices.invoiceHeader(input);parsed=parseLines(Array.isArray(input.lines)?input.lines:[]); }
   catch(error){ fail(400,'invalid_request',String(error?.message||'发票明细格式不正确。')); }
-  return {partyId,partyName,date,dueDate,note,lines:parsed.lines,total:parsed.total};
+  return {partyId,partyName,date,dueDate,note,...header,lines:parsed.lines,total:parsed.total};
 }
 
 function populateDemo(db, fixture) {
@@ -375,10 +375,10 @@ export function createWorkspace({file=':memory:', publicOrigin='', allowSignup=t
         const no=Invoices.nextNumber(next), seq=++next.seq, txnId='T'+seq;
         const {partyId,partyName,date,dueDate,lines,total,note}=entry;
         next.txns.push({id:txnId,seq,date,tpl:'salesInvoice',memo:'銷售發票 '+no+' · '+partyName,ref:no,party:partyName,adj:false,
-          p:{invNo:no,account,partyId,partyName,dueDate,lines:JSON.stringify(lines.map(line=>({desc:line.desc,qty:String(line.qty/1000),price:(line.price/100).toFixed(2)})))},
+          p:{invNo:no,account,partyId,partyName,dueDate,lines:JSON.stringify(lines.map(Invoices.formLine))},
           memoUser:'',...(note?{note}:{}),groups:[[{a:'1100',s:total},{a:account,s:-total}]],
           biz:{v:1,events:[{kind:'open',ledger:'receivable',partyId,partyName,amount:total,dueDate}]},
-          inv:{v:1,no,account,lines,request:id}});
+          inv:{v:1,no,account,...Invoices.invoiceHeader(entry),lines,request:id}});
         posted.push({id:txnId,no});
       }
       try { Invoices.validate(next); Business.validate(next); }
@@ -398,7 +398,7 @@ export function createWorkspace({file=':memory:', publicOrigin='', allowSignup=t
     const live=new Map(invoiceSummary(book,today).map(x=>[x.id,x]));
     const requests=queries.requestMine.all(user.id).map(r=>{
       const x=live.get(posted.get(r.id));
-      return {...requestRow(r),invoice:x?{id:x.id,no:x.no,date:x.date,dueDate:x.dueDate,amount:x.amount,balance:x.balance,settled:x.settled,status:x.status,overdueDays:x.overdueDays}:null};
+      return {...requestRow(r),invoice:x?{print:x.print,id:x.id,no:x.no,date:x.date,dueDate:x.dueDate,amount:x.amount,balance:x.balance,settled:x.settled,status:x.status,overdueDays:x.overdueDays}:null};
     });
     return {company:book?{name:book.company?.name||'',cur:book.company?.cur||'',year:book.company?.year||null}:null,customers:ownCustomers(user),requests};
   }

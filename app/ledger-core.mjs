@@ -15,7 +15,13 @@ const plain = value => JSON.parse(JSON.stringify(value));
 export const Invoices = window.AccountingInvoices;
 export const parseLines = raw => plain(Invoices.parseLines(raw));
 export const customers = book => book ? plain(Invoices.customers(book)) : [];
-export const invoiceSummary = (book, asOf) => book ? plain(Invoices.summary(book, undefined, asOf).invoices.map(({txn, applications, returns, ...x}) => x)) : [];
+export function invoiceSummary(book,asOf){
+  if(!book)return [];
+  return plain(Invoices.summary(book,undefined,asOf).invoices.map(row=>{
+    const {txn,applications,returns,...summary}=row;
+    return {...summary,print:Invoices.printData(row)};
+  }));
+}
 
 export const Bank = window.AccountingBank;
 export const Business = window.AccountingBusiness;

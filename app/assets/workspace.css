@@ -232,12 +232,7 @@ body[data-section=bookkeeping] .bsec{padding:clamp(14px,3vw,28px)}
 .inv-posting p{margin:0}
 .inv-posting ul{margin:6px 0 0;padding-left:18px}
 @media(max-width:560px){.invoice-dialog .fields{grid-template-columns:1fr}}
-@media print{
-  body.print-invoice .app,body.print-invoice .rail,body.print-invoice .invoice-actions{display:none!important}
-  body.print-invoice .modal{display:block!important;position:static;background:none;padding:0}
-  body.print-invoice .modal-box{border:0;width:auto;max-height:none;overflow:visible;padding:0;box-shadow:none;color:#000;background:#fff}
-  body.print-invoice .inv-posting{display:none}
-}
+
 
 /* AI comparison of bank rows and ledger vouchers */
 .bank-ai .enterprise-heading{margin-bottom:12px}

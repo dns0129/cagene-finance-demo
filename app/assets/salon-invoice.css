@@ -1,0 +1,76 @@
+.invoice-lines th small{display:block;font-weight:400;color:var(--muted)}
+.modal-box.salon-editor{
+  width:min(1120px,100%);
+  max-width:100%;
+  display:block;
+  padding:clamp(16px,2vw,28px);
+  overscroll-behavior:contain;
+}
+.salon-editor>.tdesc,.salon-editor>.period-notice{margin:6px 0 0}
+.salon-editor-columns{
+  display:grid;
+  grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);
+  gap:clamp(16px,2.5vw,32px);
+  align-items:start;
+  margin:20px 0 16px;
+}
+.salon-editor-columns h4{margin:0;font:600 15px/1.4 var(--f-ui);color:var(--ink)}
+.salon-editor-info,.salon-editor-items{display:grid;gap:12px;min-width:0}
+.salon-editor-items{padding-left:clamp(16px,2.5vw,32px);border-left:1px solid var(--rule)}
+.salon-editor .field{min-width:0;font:500 12px/1.4 var(--f-ui);color:var(--ink2)}
+.salon-editor .field :is(input,select,textarea){max-width:100%;color:var(--ink)}
+.salon-item{min-width:0;margin:0;padding:8px 14px 12px;border:1px solid var(--rule2);border-radius:8px}
+.salon-item legend{padding:0 5px;font:600 12px/1.4 var(--f-ui);color:var(--ink2)}
+.salon-item-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:8px}
+.salon-item-end,.salon-item-total{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.salon-item-end{margin-top:10px}
+.salon-item-end span,.salon-item-total span{margin-left:auto;color:var(--ink2);font-size:12px}
+.salon-editor strong{font-variant-numeric:tabular-nums}
+.salon-item-end strong,.salon-item-total strong{margin-left:6px;color:var(--ink)}
+.salon-item-total strong{font-size:18px}
+.salon-editor>.actions{justify-content:flex-end;padding-top:12px;border-top:1px solid var(--rule)}
+.salon-editor>.err:empty{display:none}
+@media(max-width:740px){
+  .salon-editor-columns{grid-template-columns:minmax(0,1fr);gap:18px}
+  .salon-editor-items{padding:16px 0 0;border-left:0;border-top:1px solid var(--rule)}
+}
+@media(max-width:480px){
+  .salon-item-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .salon-item-grid .field:last-child{grid-column:1/-1}
+}
+
+#salon-print-page{position:fixed;left:-300vw;top:0;width:190mm;height:276mm;visibility:hidden;pointer-events:none;box-sizing:content-box;overflow:hidden;background:white;color:black}
+.salon-sheet,.salon-sheet *{box-sizing:border-box}
+.salon-sheet{position:absolute;top:0;left:0;transform-origin:top left;font:9pt/1.3 Arial,"PingFang HK","Microsoft JhengHei",sans-serif;color:#111;overflow-wrap:anywhere;font-variant-numeric:tabular-nums;text-align:left;letter-spacing:normal}
+.salon-sheet :is(h1,h2,h3,dl,dt,dd,p){margin:0;padding:0;font:inherit;color:inherit;letter-spacing:normal}
+.salon-sheet h1{text-align:center;font-size:13pt;font-weight:700}
+.salon-sheet header{display:grid;grid-template-columns:1fr 1fr;column-gap:8mm;margin:1.5mm 0 2mm}
+.salon-sheet dl div{display:grid;grid-template-columns:30% 1fr;align-items:baseline}
+.salon-sheet table{border-collapse:collapse;table-layout:fixed;width:100%;font:inherit;color:inherit}
+.salon-sheet :is(th,td){padding:2mm .7mm;text-align:right;border:0;background:transparent;color:inherit;font:inherit;vertical-align:top}
+.salon-sheet thead{border-top:.25mm solid #555}
+.salon-sheet :is(th,td):nth-child(-n+2){text-align:left}
+.salon-sheet thead th{font-weight:600}
+.salon-sheet tbody tr:not(.salon-note){border-top:.2mm solid #777}
+.salon-sheet tbody{border-bottom:.25mm solid #555}
+.salon-sheet .salon-note td{padding:0 .7mm 2mm;font-style:italic}
+.salon-sheet tr:has(+.salon-note) td{padding-bottom:.35mm}
+.salon-sheet .salon-totals{width:31%;margin:2mm 0 2mm auto}
+.salon-sheet .salon-totals div{grid-template-columns:1fr 47%;padding:.35mm 0}
+.salon-totals dd{text-align:right}
+.salon-totals div:nth-child(-n+2) dd{border-bottom:.22mm solid #222}
+.salon-sheet .salon-terms{font-size:6.8pt;line-height:1.27}
+.salon-terms :is(h2,h3){font-weight:700}
+.salon-terms h3{margin-top:.4mm}
+.salon-sheet footer{margin-top:3mm;font-weight:600;display:flex;align-items:flex-end;gap:3mm;min-height:7mm}
+.salon-sheet footer span{display:inline-block;width:50mm;border-bottom:.22mm solid #555}
+.salon-sheet.compact :is(th,td){padding:.65mm .7mm}
+.salon-sheet.compact .salon-note td{padding:0 .7mm .65mm}
+.salon-sheet.compact .salon-terms{columns:2;column-gap:5mm}
+.salon-sheet.compact .salon-terms section{break-inside:avoid}
+@page salonInvoice{size:A4 portrait;margin:10mm}
+@media print{
+  html:has(body.salon-printing),body.salon-printing{page:salonInvoice;display:block!important;margin:0!important;padding:0!important;min-height:0!important;height:auto!important;width:auto!important;background:white!important}
+  body.salon-printing>:not(#salon-print-page){display:none!important}
+  body.salon-printing #salon-print-page{position:relative;left:0;top:0;visibility:visible}
+}

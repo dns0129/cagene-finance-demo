@@ -158,7 +158,7 @@ function salesRequest(book,commit,validDate,path,method='GET',input) {
       const note=String(input.note||'').trim();
       if(note.length>500)throw new Error('给会计的说明最多 500 字。');
       const request={id:existing?.id||crypto.randomUUID(),status:'pending',updatedAt:Date.now(),reviewNote:'',
-        data:{partyId:customer.id,partyName:customer.name,date,dueDate,note,lines,total}};
+        data:{partyId:customer.id,partyName:customer.name,date,dueDate,note,...window.AccountingInvoices.invoiceHeader(input),lines,total}};
       if(existing)data.requests[index]=request;
       else data.requests.push(request);
     }
