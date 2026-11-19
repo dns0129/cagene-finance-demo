@@ -3,6 +3,7 @@
 'use strict';
 const B=window.AccountingBank, E=window.AccountingEnterprise;
 const Locale=window.AccountingLocale, esc=Locale.literal, uiEsc=Locale.escape;
+const dateLabel = date => `<time class="bank-date" datetime="${esc(date)}">${esc(date)}</time>`;
 const btn = (action,label,attrs='') => `<button type="button" class="btn" data-bank-act="${action}"${attrs}>${label}</button>`;
 
 class BankWorkspace {
@@ -15,7 +16,8 @@ class BankWorkspace {
       el.addEventListener('change', event=>this.change(event.target));
     }
     modal.addEventListener('input', event=>{
-      if(event.target.matches('[data-bank-input]')) this.invalidate();
+      if(event.target.id==='bank-text') this.readImportPeriod();
+      else if(event.target.matches('[data-bank-input]')) this.invalidate();
       else if(event.target.matches('[data-settle-amt]')) { const box=this.modal.querySelector('#settle-pick-'+event.target.dataset.settleAmt); if(box) box.checked=!!event.target.value.trim(); this.settleTotal(); }
     });
   }
@@ -47,7 +49,7 @@ class BankWorkspace {
       : `还有 ${r.bankUnmatched} 条流水、${r.unmatchedVouchers.length} 笔凭证未匹配。${r.openingDifference||r.endingDifference?'请同时核对余额差额。':''}`;
     this.root.innerHTML=Locale.markup(`<article class="enterprise-card bank-summary">
       <div class="enterprise-heading"><div><h3>${book.company.year} 年 ${month} 月资金账户对账</h3><p>核对所选资金账户的流水与凭证 · ${esc(book.company.cur)}</p></div><div class="actions"><div class="field period-select"><label for="bank-account">资金账户</label><select id="bank-account">${B.accounts(book).map(a=>`<option value="${esc(a.id)}"${a.id===this.account?' selected':''}>${a.id===B.MAIN?uiEsc(a.name):esc(a.name)}</option>`).join('')}</select></div><div class="field period-select"><label for="bank-month">对账月份</label><select id="bank-month">${options}</select></div></div></div>
-      <div class="close-status${s && !r.ready?' has-issues':''}"><strong>${r.ready?'对账完成':s?'有待核对差异':'尚未导入对账单'}</strong><span>${next}</span></div>
+      <div class="close-status${s && !r.ready?' has-issues':''}"><strong>${r.ready?'对账完成':s?'有待核对差异':'尚未导入对账单'}</strong><span>${next} ${uiEsc(B.reconciliationNote(s))}</span></div>
       <div class="actions bank-main-actions"><button type="button" class="btn ${s?'':'primary'}" data-bank-act="import"${locked || !this.canWrite()?' disabled':''}>${s?'匯入更多流水 / 更新':'导入银行流水 CSV'}</button>${!s?btn('template','下载 CSV 模板'):''}${btn('close',this.closeReviewMonth?`返回 ${this.closeReviewMonth} 月月结`:'返回本月月结')}</div>
       <details class="entry-more bank-balance"${s&&r.ready?'':' open'}><summary>核对金额与余额</summary><div class="scroll"><table class="enterprise-table bank-totals"><thead><tr><th scope="col">核对项目</th><th scope="col">银行对账单</th><th scope="col">账面现金</th><th scope="col">差额</th></tr></thead><tbody>
         ${[['期初余额',s?.opening,r.bookOpening,r.openingDifference],['本月净变动',r.bankMovement,r.bookMovement,r.movementDifference],['期末余额',s?.closing,r.bookEnding,r.endingDifference]].map(([label,bank,ledger,diff])=>`<tr><th scope="row">${label}</th><td>${this.money(bank)}</td><td>${this.money(ledger)}</td><td${diff?' class="err"':''}>${this.money(diff)}</td></tr>`).join('')}
@@ -181,59 +183,85 @@ class BankWorkspace {
   }
   importDialog() {
     if (this.locked() || !this.canWrite()) return;
-    const month=this.month(), current=B.get(this.book(),month,this.account);
-    this.preview=null;
+    const month=this.month();
+
+    this.importMonth=month;
+    this.detectedPeriod=null;
     this.dialog(`<h3 id="bank-dialog-title">导入 ${month} 月银行对账单</h3>
-      <p class="tdesc">可重複匯入同月不同日期區段。輸入 CSV 實際覆蓋的起訖日期和區段起訖餘額。日期留空時按整月處理。支持「交易日期、收款金额、付款金额」，或用「金额」一列（流入为正、流出为负）。摘要和流水号选填。无交易月份可提交只有表头的 CSV。</p>
-      ${current&&!current.from?'<p class="period-notice">選擇日期區段會保留原有匹配。日期留空並整月重新匯入會替換整月流水及匹配。</p>':''}
+      <p class="tdesc">选择 CSV 后即可确认导入。支持直接上传含 Debit、Credit 和 Ledger Balance 的港币综合账户 CSV。日期和余额可留空，系统优先读取文件内的期初、期末记录。新流水会加入待匹配列表，已导入的相同行会跳过。</p>
       <div class="fields"><div class="field"><label for="bank-from">區段開始日期</label><input id="bank-from" type="date" data-bank-input></div><div class="field"><label for="bank-to">區段結束日期</label><input id="bank-to" type="date" data-bank-input></div></div>
-      <div class="fields"><div class="field"><label for="bank-opening">对账单期初余额</label><input id="bank-opening" data-bank-input inputmode="decimal" autocomplete="off"></div><div class="field"><label for="bank-closing">对账单期末余额</label><input id="bank-closing" data-bank-input inputmode="decimal" autocomplete="off"></div></div>
+      <div class="fields"><div class="field"><label for="bank-opening">对账单期初余额</label><input id="bank-opening" placeholder="1,234.56" data-bank-input inputmode="decimal" autocomplete="off"></div><div class="field"><label for="bank-closing">对账单期末余额</label><input id="bank-closing" placeholder="1,234.56" data-bank-input inputmode="decimal" autocomplete="off"></div></div>
       <div class="field"><label for="bank-file">选择 CSV 文件</label><input id="bank-file" type="file" accept=".csv,text/csv"></div>
       <div class="field"><label for="bank-text">或粘贴 CSV</label><textarea id="bank-text" data-bank-input rows="5" maxlength="300000" spellcheck="false"></textarea></div>
       <div id="bank-import-result" aria-live="polite"></div>
       <div class="actions">${btn('template','下载 CSV 模板')}${btn('preview','校验并预览')}<button type="button" class="btn primary" data-bank-act="import-confirm" id="bank-import-confirm" disabled>確認匯入</button><button type="button" class="btn" data-act="closeModal">取消</button></div>`);
-    this.modal.querySelector('#bank-opening').value=current&&!current.from?String(current.opening/100):'';
-    this.modal.querySelector('#bank-closing').value=current&&!current.from?String(current.closing/100):'';
   }
   importInput() {
     const val = id => this.modal.querySelector('#bank-'+id).value;
     return {opening:val('opening'),closing:val('closing'),from:val('from'),to:val('to'),text:val('text')};
   }
+  readImportPeriod(){
+    const field=id=>this.modal.querySelector('#bank-'+id);
+    this.importMonth=this.month();
+    for(const key of ['from','to']){
+      if(this.detectedPeriod && field(key).value===this.detectedPeriod[key]) field(key).value='';
+    }
+    this.detectedPeriod=null;
+    this.invalidate();
+    try{
+      const period=B.bankExportPeriod(field('text').value,this.book().company,this.validDate);
+      if(period){
+        this.detectedPeriod=period;
+        this.importMonth=period.month;
+        field('from').value=period.from;
+        field('to').value=period.to;
+      }
+      field('dialog-title').textContent=Locale.text(`导入 ${this.importMonth} 月银行对账单`);
+      if(period) this.showPreview();
+    }catch(e){
+      field('dialog-title').textContent=Locale.text(`导入 ${this.importMonth} 月银行对账单`);
+      field('import-result').textContent=Locale.text(e.message);
+      field('import-confirm').disabled=true;
+    }
+  }
   invalidate() {
-    this.preview=null;
+
     const result=this.modal.querySelector('#bank-import-result'), confirm=this.modal.querySelector('#bank-import-confirm');
     if (result) result.replaceChildren();
-    if (confirm) confirm.disabled=true;
+    if (confirm) confirm.disabled=!this.modal.querySelector('#bank-text').value.trim();
   }
   showPreview() {
     this.invalidate();
-    const book=this.book(),month=this.month(),input=this.importInput(),result=this.modal.querySelector('#bank-import-result');
+    const book=this.book(),month=this.importMonth,input=this.importInput(),result=this.modal.querySelector('#bank-import-result');
     try {
       const s=B.importStatement(book,month,input,this.validDate,this.account);
-      this.preview={book,month,input,account:this.account};
+      const old=B.get(book,month,this.account), added=s.rows.slice(old?.rows.length||0);
       const repeat=s.rows.length-new Set(s.rows.map(row=>JSON.stringify(row))).size;
-      result.innerHTML=Locale.markup(`<div class="preview"><strong>${s.rows.length} 条流水通过校验 · 净变动 ${esc(book.company.cur)} ${this.money(s.closing-s.opening)}</strong>
-        ${s.from?`<p class="hint">匯入後覆蓋 ${s.from} 至 ${s.to}，原有匹配會保留。</p>`:''}
+      result.innerHTML=Locale.markup(`<div class="preview"><strong>本次新增 ${added.length} 条流水 · 净变动 ${esc(book.company.cur)} ${this.money(added.reduce((sum,row)=>sum+row.amount,0))}</strong>
+        <p class="hint">导入后期初余额 ${this.money(s.opening)} · 期末余额 ${this.money(s.closing)}</p>
+        <p class="hint">${uiEsc(B.reconciliationNote(s))}</p>
+        ${s.from?`<p class="hint">匯入後覆蓋 ${dateLabel(s.from)} 至 ${dateLabel(s.to)}，原有匹配會保留。</p>`:''}
         ${repeat?`<p class="hint">有 ${repeat} 条内容相同的流水，已分别保留，请对照银行原单确认。</p>`:''}
-        <ol class="batch-preview">${s.rows.slice(0,10).map(r=>`<li>${r.date} · ${(r.memo || r.ref ? esc(r.memo || r.ref) : '银行流水')} · ${this.money(r.amount)}</li>`).join('')}</ol>${s.rows.length>10?'<p class="hint">仅预览前 10 条。</p>':''}</div>`);
+        <ol class="batch-preview">${added.slice(0,10).map(r=>`<li>${dateLabel(r.date)} · ${(r.memo || r.ref ? esc(r.memo || r.ref) : '银行流水')} · ${this.money(r.amount)}</li>`).join('')}</ol>${added.length>10?'<p class="hint">仅预览前 10 条。</p>':''}</div>`);
       this.modal.querySelector('#bank-import-confirm').disabled=false;
-    } catch(e) { result.innerHTML=Locale.markup(`<p class="err">${uiEsc(e.message)}。本次尚未导入。</p>`); }
+    } catch(e) { this.modal.querySelector('#bank-import-confirm').disabled=true; result.innerHTML=Locale.markup(`<p class="err">${uiEsc(e.message)}。本次尚未导入。</p>`); }
   }
   commitImport() {
-    const preview=this.preview, book=this.book(), month=this.month(), input=this.importInput();
-    if (!preview || preview.book!==book || preview.month!==month || preview.account!==this.account || !Object.keys(input).every(k=>input[k]===preview.input[k])) return;
+    if (this.locked() || !this.canWrite()) return;
+    const book=this.book(), month=this.importMonth, input=this.importInput();
+    const before=B.get(book,month,this.account)?.rows.length||0;
     let statement;
     try { statement=B.importStatement(book,month,input,this.validDate,this.account); }
     catch(e) { this.showPreview(); return; }
-    if (!this.persist(statement)) return;
-    this.preview=null; this.select(month); this.modal.hidden=true; this.render();
-    this.toast(`已导入 ${statement.rows.length} 条银行流水，请确认匹配。`);
+    if (!this.persist(statement,month)) return;
+    this.select(month); this.modal.hidden=true; this.render();
+    this.toast(`本次新增 ${statement.rows.length-before} 条银行流水，请确认匹配。`);
   }
-  persist(statement) {
-    if (this.locked() || !this.canWrite()) return false;
+  persist(statement,month=this.month()) {
+    if (this.locked(month) || !this.canWrite()) return false;
     const book=this.book(), field=this.account===B.MAIN?'bankReconciliation':'bankReconciliationByAccount',old=book[field];
-    if(this.account===B.MAIN)book[field]={...old,[this.month()]:statement};
-    else book[field]={...old,[this.account]:{...(old?.[this.account]||{}),[this.month()]:statement}};
+    if(this.account===B.MAIN)book[field]={...old,[month]:statement};
+    else book[field]={...old,[this.account]:{...(old?.[this.account]||{}),[month]:statement}};
     if (this.save()) return true;
     if (old) book[field]=old; else delete book[field];
     this.toast('保存失败，本次对账改动没有应用。');
@@ -356,11 +384,11 @@ class BankWorkspace {
     if (el.id!=='bank-file') return;
     const field=this.modal.querySelector('#bank-text'), file=el.files?.[0];
     if (!field || !file) return;
-    this.invalidate(); field.value='';
+    field.value=''; this.readImportPeriod();
     const result=this.modal.querySelector('#bank-import-result');
     if (file.size>1_200_000) { result.textContent=Locale.text('CSV 文件过大。'); return; }
     const reader=new FileReader();
-    reader.onload=()=>{if(field.isConnected && !field.value && el.files?.[0]===file){field.value=String(reader.result);result.textContent=Locale.text('文件已读取，请填写余额后点击「校验并预览」。');}};
+    reader.onload=()=>{if(field.isConnected && !field.value && el.files?.[0]===file){field.value=String(reader.result);this.readImportPeriod();}};
     reader.onerror=()=>{if(result.isConnected) result.textContent=Locale.text('无法读取 CSV 文件。');};
     reader.readAsText(file);
   }
