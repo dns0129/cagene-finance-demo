@@ -3274,7 +3274,10 @@ document.addEventListener('click', ev => {
         bankWorkspace.account=account;
         bankWorkspace.select(Number(month));
         bankWorkspace.filter=kind;
+      } else if(kind==='review'){
+        invoiceWorkspace.scope='review';
       } else if(kind==='overdue'){
+        invoiceWorkspace.scope='posted';
         invoiceWorkspace.month=12;
         invoiceWorkspace.filter='overdue';
         invoiceWorkspace.page=1;

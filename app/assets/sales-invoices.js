@@ -143,7 +143,7 @@ class InvoiceWorkspace {
       if(event.target.id.startsWith('receipt-'))this.modal.querySelector('#receipt-error').textContent='';
     });
   }
-  reset(){this.month=12;this.filter='all';this.page=1;this.form=null;}
+  reset(){this.scope='all';this.month=12;this.filter='all';this.page=1;this.form=null;}
   money(n){return this.format(n);}
   cur(){return this.book().company.cur;}
   period(){const book=this.book(),through=E.periodFor(book,this.month).end,today=this.today();return {through,asOf:today.slice(0,4)===String(book.company.year)&&today<through?today:through};}
@@ -159,14 +159,19 @@ class InvoiceWorkspace {
       <td class="inv-text">${x.dueDate?esc(x.dueDate):'—'}<small>${this.badge(x)}</small></td><td>${this.money(x.amount)}</td><td><strong>${this.money(x.balance)}</strong></td>
       <td><div class="actions">${btn('view','查看',` data-id="${esc(x.id)}"`,'btn small')}${x.balance>0&&writable?btn('receive','收款',` data-id="${esc(x.id)}"`,'btn small'):''}${writable&&!this.lockedDate(x.date)?btn('edit','修改',` data-id="${esc(x.id)}"`,'btn small'):''}</div></td></tr>`).join('');
     const months=Array.from({length:12},(_,i)=>i+1).map(m=>`<option value="${m}"${m===this.month?' selected':''}>${m===12?'12 月（全年）':m+' 月'}</option>`).join('');
-    this.root.innerHTML=Locale.markup(`${this.reviewCard(writable)}<article class="enterprise-card">
+    const pending=this.reviews?.list().filter(r=>r.status==='pending')||[];
+    const scopes=[['all','全部',pending.length+t.count],['review','待审',pending.length],['posted','销售发票',t.count]];
+    const navigation=this.reviews?`<div class="seg" role="group" aria-label="发票分类">${scopes.map(([key,label,count])=>btn('scope',`${label} <span>${count}</span>`,` data-value="${key}" aria-pressed="${key===this.scope}"`,'')).join('')}</div>`:'';
+    const review=this.scope==='posted'?'':this.reviewCard(writable,pending);
+    const posted=`<article class="enterprise-card">
       <div class="enterprise-heading"><div><h3>销售发票</h3><p>截至 ${esc(d.through)} · 逾期按 ${esc(d.asOf)} 计算 · 金额单位 ${esc(this.cur())}</p></div><div class="actions"><div class="field period-select"><label for="invoice-month">截至月末</label><select id="invoice-month">${months}</select></div>${btn('new','＋ 新建销售发票',writable?'':' disabled','btn primary')}</div></div>
       <div class="member-metrics"><div><span>开票总额 · ${t.count} 张</span><strong>${this.money(t.amount)}</strong></div><div><span>已收款 / 已冲减</span><strong>${this.money(t.settled)}</strong></div><div><span>未收余额</span><strong>${this.money(t.balance)}</strong></div><div><span>逾期未收 · ${t.overdueCount} 张</span><strong${t.overdue?' class="err"':''}>${this.money(t.overdue)}</strong></div></div>
       <p class="hint">开票会自动记录收入和应收款。到账后可点「收款」登记，也可在银行对账时一次完成收款和匹配。</p>
       <div class="seg" role="group" aria-label="发票状态">${filters.map(([k,label,count])=>`<button type="button" data-inv-act="filter" data-value="${k}" aria-pressed="${k===this.filter}">${label} <span>${count}</span></button>`).join('')}</div>
       ${rows?`<div class="scroll"><table class="enterprise-table member-table invoice-table"><thead><tr><th scope="col">发票号 / 日期</th><th scope="col">客户 / 内容</th><th scope="col">到期日 / 状态</th><th scope="col">发票金额</th><th scope="col">未收余额</th><th scope="col">操作</th></tr></thead><tbody>${rows}</tbody></table></div>`:`<p class="empty">${t.count?'没有符合此状态的发票。':'还没有销售发票。点击「新建销售发票」，保存后会自动记入销售收入与应收账款。'}</p>`}
       ${pages>1?`<div class="journal-pagination">${btn('page','上一页',` data-value="${this.page-1}"${this.page===1?' disabled':''}`)}<span>${this.page} / ${pages} 页 · ${list.length} 张</span>${btn('page','下一页',` data-value="${this.page+1}"${this.page===pages?' disabled':''}`)}</div>`:''}
-    </article>${this.salesSummary(d)}`);
+    </article>${this.salesSummary(d)}`;
+    this.root.innerHTML=Locale.markup(navigation+review+(this.scope==='review'?'':posted));
   }
   salesSummary(data){
     if(!this.reviews?.authors)return '';
@@ -185,17 +190,17 @@ class InvoiceWorkspace {
       <tbody>${rows.map(row=>`<tr><th scope="row">${esc(row.name)}</th><td>${row.count}</td><td>${this.money(row.amount)}</td><td>${this.money(row.received)}</td><td>${this.money(row.balance)}</td></tr>`).join('')}</tbody></table></div></article>`;
   }
   /* Requests from salespeople wait here; approving one posts it through the normal invoice form. */
-  reviewCard(writable){
+  reviewCard(writable,pending){
     if(!this.reviews)return '';
-    const pending=this.reviews.list().filter(r=>r.status==='pending'), error=this.reviews.error();
-    if(!pending.length&&!error)return '';
+    const error=this.reviews.error();
+    if(!pending.length&&!error&&this.scope!=='review')return '';
     const rows=pending.map(r=>`<tr data-review="${esc(r.id)}"><th scope="row"><strong>${esc(r.data.partyName)}</strong><small>${esc(r.data.lines[0].desc)}${r.data.lines.length>1?` 等 ${r.data.lines.length} 项`:''}</small></th>
       <td class="inv-text">${esc(r.requester)}<small>${esc(new Date(r.updatedAt).toLocaleString(Locale.current,{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}))}</small></td>
       <td class="inv-text">${esc(r.data.date)}</td><td>${this.money(r.data.total)}</td>
       <td>${writable&&!r.mine?btn('review','审核',` data-id="${esc(r.id)}"`,'btn small primary'):'<small>须由其他人审核</small>'}</td></tr>`).join('');
     return `<article class="enterprise-card invoice-reviews" aria-live="polite"><div class="enterprise-heading"><div><h3>待审核的销售发票 <span class="count">${pending.length}</span></h3><p>销售提交的发票申请，审核通过后才会记账（借 应收账款、贷 收入）。</p></div><div class="actions">${writable&&this.reviews.batch&&pending.some(r=>!r.mine)?btn('batch','Wonder 核對及批量過帳','','btn primary'):''}${btn('reviews-refresh','刷新','','btn small')}</div></div>
       ${error?`<p class="err" role="alert">${uiEsc(error)}</p>`:''}
-      ${rows?`<div class="scroll"><table class="enterprise-table member-table invoice-table"><thead><tr><th scope="col">客户 / 内容</th><th scope="col">提交人 / 时间</th><th scope="col">开票日期</th><th scope="col">金额</th><th scope="col">操作</th></tr></thead><tbody>${rows}</tbody></table></div>`:''}</article>`;
+      ${rows?`<div class="scroll"><table class="enterprise-table member-table invoice-table"><thead><tr><th scope="col">客户 / 内容</th><th scope="col">提交人 / 时间</th><th scope="col">开票日期</th><th scope="col">金额</th><th scope="col">操作</th></tr></thead><tbody>${rows}</tbody></table></div>`:error?'':'<p class="empty">目前没有待审发票。</p>'}</article>`;
   }
   openBatch(period){
     if(!this.canWrite()||!this.reviews?.batch)return;
@@ -395,6 +400,11 @@ class InvoiceWorkspace {
   }
   click(el){
     const {invAct,value,id,index}=el.dataset;
+    if(invAct==='scope'){
+      this.scope=value;this.filter='all';this.page=1;this.render();
+      this.root.querySelector('[data-inv-act="scope"][aria-pressed="true"]')?.focus();
+      return;
+    }
     if(invAct==='filter'){this.filter=value;this.page=1;this.render();}
     else if(invAct==='page'){this.page=Number(value);this.render();}
     else if(invAct==='new')this.openForm();
